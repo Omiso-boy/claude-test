@@ -5,7 +5,7 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, remainingMs, isFinished, normalizeTimer, formatClock,
   PARTS, partOf, validateCustomExercise, exercisesForPart, planRows,
   equipmentOf, daySummary, exerciseStats,
-  addDays, weekStart, monthGrid, setCountsByDate, weeklyLoad, weeklyTrend,
+  weightLabel, addDays, weekStart, monthGrid, setCountsByDate, weeklyLoad, weeklyTrend,
 } from './lib.js';
 import { PART_ICONS, EQUIPMENT_ICONS, UI_ICONS, muscleFigures } from './icons.js';
 
@@ -100,7 +100,7 @@ document.querySelectorAll('[data-icon]').forEach((n) => { n.innerHTML = UI_ICONS
 function setLine(s, i, onDelete) {
   return el('li', { class: 'set' },
     el('span', { class: 'set-no' }, `${i + 1}`),
-    el('span', { class: 'set-main' }, `${formatWeight(s.weight)}kg × ${s.reps}回`),
+    el('span', { class: 'set-main' }, `${weightLabel(s.weight)} × ${s.reps}回`),
     s.note ? el('span', { class: 'set-note' }, s.note) : null,
     onDelete ? el('button', { class: 'icon-btn', 'aria-label': '削除', onclick: () => onDelete(s) }, '×') : null,
   );
@@ -110,7 +110,7 @@ function setLine(s, i, onDelete) {
 function deleteSet(s) {
   if (!saveSets(sets.filter((x) => x.id !== s.id))) return;
   render();
-  toast(`${formatWeight(s.weight)}kg × ${s.reps}回 を削除しました`, false, {
+  toast(`${weightLabel(s.weight)} × ${s.reps}回 を削除しました`, false, {
     label: '元に戻す',
     run: () => {
       if (sets.some((x) => x.id === s.id)) return;
@@ -186,14 +186,14 @@ function renderExerciseList() {
     const reps = st ? (st.repsMin === st.repsMax ? `${st.repsMin}回` : `${st.repsMin}–${st.repsMax}回`) : '−回';
     return el('li', {},
       el('button', { type: 'button', class: `ex-item${doneToday ? ' done' : ''}`, onclick: () => openExercise(name),
-        'aria-label': `${name}${st ? `、${doneToday ? '今日' : '前回'} ${st.sets}セット ${reps} 最大${formatWeight(st.maxWeight)}kg` : ''}` },
+        'aria-label': `${name}${st ? `、${doneToday ? '今日' : '前回'} ${st.sets}セット ${reps} 最大${weightLabel(st.maxWeight)}` : ''}` },
         icon(exerciseIcon(name), 'ex-ic'),
         el('span', { class: 'ex-text' },
           el('span', { class: 'ex-name' }, name),
           el('span', { class: 'ex-chips', 'aria-hidden': 'true' },
             el('span', { class: 'mini' }, st ? `${st.sets}セット` : '−セット'),
             el('span', { class: 'mini' }, reps),
-            el('span', { class: 'mini' }, st ? `${formatWeight(st.maxWeight)}kg` : '−kg'))),
+            el('span', { class: 'mini' }, st ? weightLabel(st.maxWeight) : '−kg'))),
         icon(UI_ICONS.chevronRight, 'chev')));
   }));
 }
@@ -248,7 +248,8 @@ function doneSets() {
 
 function resetRows() {
   if (!currentExercise) return;
-  rows = planRows(previousSession(sets, currentExercise, fDate.value)?.sets, doneSets()).map((r) => ({ ...r, showNote: false }));
+  // 0kg（自重）の行は空欄にして「自重」と表示する
+  rows = planRows(previousSession(sets, currentExercise, fDate.value)?.sets, doneSets()).map((r) => ({ ...r, weight: r.weight === '0' ? '' : r.weight, showNote: false }));
 }
 
 function openExercise(name) {
@@ -277,23 +278,25 @@ function renderPrevious() {
   box.hidden = false;
   box.replaceChildren(
     el('div', { class: 'prev-title' }, `前回 ${formatDate(prev.date)}`),
-    el('div', { class: 'prev-sets' }, prev.sets.map((s) => `${formatWeight(s.weight)}×${s.reps}`).join('  /  ')),
+    el('div', { class: 'prev-sets' }, prev.sets.map((s) => `${s.weight === 0 ? '自重' : formatWeight(s.weight)}×${s.reps}`).join('  /  ')),
   );
 }
 
 function recordRow(i) {
   const r = rows[i];
-  const res = validateSet({ date: fDate.value, exercise: currentExercise, weight: r.weight, reps: r.reps, note: r.note });
+  // 重量が空欄なら自重（0kg）として記録する
+  const weight = String(r.weight ?? '').trim() === '' ? '0' : r.weight;
+  const res = validateSet({ date: fDate.value, exercise: currentExercise, weight, reps: r.reps, note: r.note });
   if (!res.ok) { toast(res.error, true); return; }
   if (!saveSets([...sets, res.value])) return;
   rows.splice(i, 1);
-  toast(`${formatWeight(res.value.weight)}kg × ${res.value.reps}回 を記録しました`);
+  toast(`${weightLabel(res.value.weight)} × ${res.value.reps}回 を記録しました`);
   if (timerAuto) timerStart(timer.durationSec);
   render();
 }
 
-function numberInput(value, mode, label, onInput) {
-  return el('input', { type: 'text', inputmode: mode, value, 'aria-label': label, placeholder: '0', class: 'num-in', oninput: (e) => onInput(e.target.value), onfocus: (e) => e.target.select() });
+function numberInput(value, mode, label, onInput, placeholder = '') {
+  return el('input', { type: 'text', inputmode: mode, value, 'aria-label': label, placeholder, class: 'num-in', oninput: (e) => onInput(e.target.value), onfocus: (e) => e.target.select() });
 }
 
 function renderSetRows() {
@@ -301,7 +304,7 @@ function renderSetRows() {
   const items = done.map((s, i) => el('li', { class: 'set-row done' },
     el('div', { class: 'set-grid' },
       el('span', { class: 'set-no' }, String(i + 1)),
-      el('span', { class: 'val' }, formatWeight(s.weight), el('small', {}, 'kg')),
+      s.weight === 0 ? el('span', { class: 'val' }, '自重') : el('span', { class: 'val' }, formatWeight(s.weight), el('small', {}, 'kg')),
       el('span', { class: 'val' }, String(s.reps), el('small', {}, '回')),
       el('button', { type: 'button', class: 'del-btn', 'aria-label': `${i + 1}セット目を削除`, onclick: () => deleteSet(s) }, '×')),
     s.note ? el('div', { class: 'row-note' }, s.note) : null));
@@ -311,7 +314,7 @@ function renderSetRows() {
     items.push(el('li', { class: 'set-row' },
       el('div', { class: 'set-grid' },
         el('span', { class: 'set-no' }, String(no)),
-        el('span', { class: 'in-wrap' }, numberInput(r.weight, 'decimal', `${no}セット目の重量`, (v) => { r.weight = v; }), el('small', {}, 'kg')),
+        el('span', { class: 'in-wrap' }, numberInput(r.weight, 'decimal', `${no}セット目の重量（空欄は自重）`, (v) => { r.weight = v; }, '自重'), el('small', {}, 'kg')),
         el('span', { class: 'in-wrap' }, numberInput(r.reps, 'numeric', `${no}セット目の回数`, (v) => { r.reps = v; }), el('small', {}, '回')),
         el('button', { type: 'button', class: 'check-btn', 'aria-label': `${no}セット目を記録`, onclick: () => recordRow(i) }, '✓')),
       el('div', { class: 'row-tools' },
@@ -325,7 +328,7 @@ function renderSetRows() {
 
 $('#add-row').addEventListener('click', () => {
   const last = rows[rows.length - 1] ?? doneSets().slice(-1)[0];
-  rows.push({ weight: last ? String(last.weight) : '', reps: last ? String(last.reps) : '', note: '', showNote: false });
+  rows.push({ weight: last && Number(last.weight) !== 0 ? String(last.weight) : '', reps: last ? String(last.reps) : '', note: '', showNote: false });
   renderSetRows();
 });
 

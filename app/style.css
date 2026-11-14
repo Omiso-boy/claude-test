@@ -370,3 +370,5 @@ details summary::-webkit-details-marker { display: none; }
 .trend-bar.cur { opacity: 1; }
 .trend-bar.picked { opacity: 1; stroke: var(--text); stroke-width: 1.5; }
 .trend-hit { fill: transparent; cursor: pointer; }
+
+.num-in::placeholder { color: var(--muted); font-weight: 600; font-size: 16px; opacity: .8; }

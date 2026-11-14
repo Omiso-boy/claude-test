@@ -443,3 +443,8 @@ export function weeklyTrend(sets, custom, endWeekStartKey, n = 8) {
     return { week, load: weeklyLoad(sets, custom, week) };
   });
 }
+
+/** 表示用の重量。0kg は「自重」 */
+export function weightLabel(w) {
+  return w === 0 ? '自重' : `${formatWeight(w)}kg`;
+}

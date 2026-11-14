@@ -297,3 +297,11 @@ test('weeklyTrend: 古い順に n 週', () => {
   assert.equal(t[1].load.chest.sets, 1);
   assert.equal(t[2].load.chest.sets, 0);
 });
+
+import { weightLabel } from '../app/lib.js';
+
+test('weightLabel: 0kgは自重と表示', () => {
+  assert.equal(weightLabel(0), '自重');
+  assert.equal(weightLabel(62.5), '62.5kg');
+  assert.equal(weightLabel(60), '60kg');
+});
