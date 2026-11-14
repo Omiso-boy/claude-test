@@ -377,29 +377,3 @@ export function exerciseStats(sets, name, date) {
     maxWeight: Math.max(...src.sets.map((s) => s.weight)),
   };
 }
-
-// ---------- 何の日（記録前に決める部位） ----------
-/** 保存データを検証して { 'YYYY-MM-DD': [部位...] } に整える。不正な値は捨てる */
-export function normalizePlans(raw) {
-  const out = {};
-  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return out;
-  for (const [date, parts] of Object.entries(raw)) {
-    if (!DATE_RE.test(date) || !Array.isArray(parts)) continue;
-    const valid = [...new Set(parts.filter(isPart))];
-    if (valid.length) out[date] = valid;
-  }
-  return out;
-}
-
-/** 部位の選択を切り替える（並びは PARTS の順にそろえる） */
-export function togglePlanPart(parts, key) {
-  const set = new Set(parts ?? []);
-  if (set.has(key)) set.delete(key); else if (isPart(key)) set.add(key);
-  return PARTS.map((p) => p.key).filter((k) => set.has(k));
-}
-
-/** 表示する「何の日」。決めてあればそれを、なければ記録から */
-export function dayParts(plans, date, recordedParts) {
-  const planned = plans[date];
-  return planned?.length ? { parts: planned, planned: true } : { parts: recordedParts, planned: false };
-}
