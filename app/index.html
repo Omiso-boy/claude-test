@@ -37,6 +37,11 @@
   <main>
     <!-- 記録 -->
     <section id="view-record" class="view">
+      <div id="install-tip" class="reminder" hidden>
+        <span>ホーム画面に追加すると、記録が消えにくくなります</span>
+        <button type="button" id="install-how" class="btn small">方法</button>
+        <button type="button" id="install-close" class="tip-close" aria-label="閉じる">×</button>
+      </div>
       <div id="reminder" class="reminder" hidden>
         <span>しばらくバックアップしていません</span>
         <button type="button" id="reminder-btn" class="btn small">今すぐ</button>
@@ -167,7 +172,8 @@
         </label>
         <p class="help">今ある記録は消えません。まだない記録だけを追加します。機種変更のときにも使えます。</p>
       </div>
-      <p class="help">記録はこのiPhoneの中だけに保存されています。定期的にバックアップしてください。</p>
+      <p class="help">記録はこの端末の中だけに保存されています。定期的にバックアップしてください。</p>
+      <button type="button" id="open-guide" class="btn ghost">使い方・注意を見る</button>
     </section>
   </main>
 
@@ -178,6 +184,54 @@
   </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
+
+  <!-- 初回の案内 -->
+  <div id="guide" class="guide" role="dialog" aria-modal="true" aria-labelledby="guide-title" hidden>
+    <div class="guide-box">
+      <div class="guide-steps" id="guide-dots" aria-hidden="true"></div>
+
+      <section class="guide-page" data-page="welcome">
+        <div class="guide-hero" id="guide-hero"></div>
+        <h2 id="guide-title">筋トレ記録へようこそ</h2>
+        <p>部位から種目を選んで、<strong>✓をタップするだけ</strong>で記録できる、シンプルな記録アプリです。</p>
+        <ul class="guide-list">
+          <li>前回の重量・回数が自動で入る</li>
+          <li>記録すると休憩タイマーが自動でスタート</li>
+          <li>カレンダーとグラフで振り返り</li>
+        </ul>
+      </section>
+
+      <section class="guide-page" data-page="install" hidden>
+        <h2>ホーム画面に追加してください</h2>
+        <p class="guide-warn">ブラウザで開いたままだと、<strong>7日間使わなかったときに記録が消えることがあります。</strong>ホーム画面に追加すると防げます。</p>
+        <h3>iPhone（Safari）</h3>
+        <ol class="guide-list">
+          <li><strong>共有ボタン</strong>（□に↑のマーク）をタップ。見当たらなければ画面下の <strong>…</strong> の中にあります</li>
+          <li><strong>「ホーム画面に追加」</strong>をタップ</li>
+          <li>ホーム画面のアイコンから開く</li>
+        </ol>
+        <h3>Android（Chrome）</h3>
+        <ol class="guide-list">
+          <li>右上の <strong>︙</strong> をタップ</li>
+          <li><strong>「ホーム画面に追加」</strong>または<strong>「アプリをインストール」</strong>をタップ</li>
+        </ol>
+      </section>
+
+      <section class="guide-page" data-page="data" hidden>
+        <h2>記録はこの端末の中だけ</h2>
+        <ul class="guide-list">
+          <li>記録はあなたの端末の中だけに保存され、<strong>外部には送信されません</strong>。登録やログインも不要です。</li>
+          <li>アプリを削除したり、機種変更したりすると記録は残りません。<strong>「バックアップ」タブから定期的に保存</strong>してください（Googleドライブなどに保存できます）。</li>
+          <li>しばらくバックアップしていないと、記録画面でお知らせします。</li>
+        </ul>
+      </section>
+
+      <div class="guide-actions">
+        <button type="button" id="guide-back" class="btn">戻る</button>
+        <button type="button" id="guide-next" class="btn primary">次へ</button>
+      </div>
+    </div>
+  </div>
 
   <div id="boot-error" class="boot-error" hidden>
     <p>アプリを起動できませんでした。<br>古いファイルが残っている可能性があります。</p>

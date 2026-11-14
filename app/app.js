@@ -676,6 +676,53 @@ function render() {
 render();
 renderTimer();
 
+// ---------- 初回の案内 ----------
+const KEY_GUIDE = 'kintore.v1.guideDone';
+const KEY_TIP = 'kintore.v1.installTipClosed';
+/** ホーム画面から開いているか（iPhone は navigator.standalone、その他は display-mode） */
+const isStandalone = () => window.matchMedia?.('(display-mode: standalone)').matches || navigator.standalone === true;
+
+let guidePages = [];
+let guideIndex = 0;
+
+function openGuide(startPage = 'welcome') {
+  // ホーム画面から開いている人には「ホーム画面に追加」のページは出さない
+  guidePages = ['welcome', ...(isStandalone() ? [] : ['install']), 'data'];
+  guideIndex = Math.max(0, guidePages.indexOf(startPage));
+  $('#guide-hero').innerHTML = muscleFigures(['chest', 'arms', 'legs']);
+  $('#guide').hidden = false;
+  document.body.classList.add('no-scroll');
+  renderGuide();
+}
+
+function closeGuide() {
+  $('#guide').hidden = true;
+  document.body.classList.remove('no-scroll');
+  saveJson(KEY_GUIDE, true);
+  renderInstallTip();
+}
+
+function renderGuide() {
+  const page = guidePages[guideIndex];
+  document.querySelectorAll('.guide-page').forEach((p) => { p.hidden = p.dataset.page !== page; });
+  $('#guide-dots').replaceChildren(...guidePages.map((_, i) => el('span', { class: `dot${i === guideIndex ? ' on' : ''}` })));
+  $('#guide-back').hidden = guideIndex === 0;
+  $('#guide-next').textContent = guideIndex === guidePages.length - 1 ? 'はじめる' : '次へ';
+  $('#guide .guide-box').scrollTop = 0;
+}
+
+$('#guide-next').addEventListener('click', () => { if (guideIndex < guidePages.length - 1) { guideIndex++; renderGuide(); } else closeGuide(); });
+$('#guide-back').addEventListener('click', () => { if (guideIndex > 0) { guideIndex--; renderGuide(); } });
+$('#open-guide').addEventListener('click', () => openGuide());
+
+function renderInstallTip() {
+  $('#install-tip').hidden = isStandalone() || !loadJson(KEY_GUIDE) || !!loadJson(KEY_TIP);
+}
+$('#install-how').addEventListener('click', () => openGuide('install'));
+$('#install-close').addEventListener('click', () => { saveJson(KEY_TIP, true); renderInstallTip(); });
+
+if (!loadJson(KEY_GUIDE)) openGuide(); else renderInstallTip();
+
 // 起動できたことを index.html の見張り役に知らせる
 window.__kintoreReady = true;
 try { sessionStorage.removeItem('kintore.recovering'); } catch { /* 無視 */ }

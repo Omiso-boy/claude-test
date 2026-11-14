@@ -372,3 +372,31 @@ details summary::-webkit-details-marker { display: none; }
 .trend-hit { fill: transparent; cursor: pointer; }
 
 .num-in::placeholder { color: var(--muted); font-weight: 600; font-size: 16px; opacity: .8; }
+
+/* ---------- 初回の案内 ---------- */
+body.no-scroll { overflow: hidden; }
+.guide {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(0, 0, 0, .55);
+  display: flex; align-items: flex-end; justify-content: center;
+  padding: env(safe-area-inset-top) 0 0;
+}
+.guide-box {
+  width: 100%; max-width: 560px; max-height: 100%; overflow-y: auto;
+  background: var(--surface); border-radius: 20px 20px 0 0;
+  padding: 16px 20px calc(16px + env(safe-area-inset-bottom));
+}
+.guide-steps { display: flex; justify-content: center; gap: 6px; margin-bottom: 8px; }
+.guide-steps .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); }
+.guide-steps .dot.on { background: var(--accent); width: 20px; border-radius: 4px; }
+.guide-page h2 { margin: 8px 0 8px; font-size: 22px; }
+.guide-page h3 { margin: 14px 0 4px; font-size: 15px; }
+.guide-page p { margin: 0 0 8px; }
+.guide-hero { display: flex; justify-content: center; gap: 8px; margin: 4px 0; }
+.guide-hero .fig { width: 76px; height: 114px; }
+.guide-list { margin: 4px 0 8px; padding-left: 1.4em; display: grid; gap: 6px; }
+.guide-warn { background: var(--accent-soft); border-radius: 12px; padding: 10px 12px; font-size: 14px; }
+.guide-actions { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 8px; margin-top: 12px; }
+.tip-close { border: none; background: none; color: var(--muted); font-size: 20px; width: 36px; height: 36px; flex: 0 0 auto; }
+#install-tip { gap: 6px; }
+#install-tip span { flex: 1; }
