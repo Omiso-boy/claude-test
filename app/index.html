@@ -69,6 +69,24 @@
         <button type="submit" class="btn primary">記録する</button>
       </form>
 
+      <section id="timer" class="card timer" aria-label="休憩タイマー">
+        <div class="timer-head">
+          <span class="lbl">休憩タイマー</span>
+          <label class="auto"><input type="checkbox" id="timer-auto"> 記録したら自動スタート</label>
+        </div>
+        <div id="timer-clock" class="timer-clock" role="timer" aria-live="off">1:30</div>
+        <div id="timer-status" class="timer-status" aria-live="polite"></div>
+        <div class="presets">
+          <button type="button" class="preset" data-sec="60">60秒</button>
+          <button type="button" class="preset" data-sec="90">90秒</button>
+          <button type="button" class="preset" data-sec="120">120秒</button>
+        </div>
+        <div class="timer-ctrl">
+          <button type="button" id="timer-toggle" class="btn">スタート</button>
+          <button type="button" id="timer-reset" class="btn">リセット</button>
+        </div>
+      </section>
+
       <h2 id="day-title" class="section-title"></h2>
       <div id="day-list"></div>
     </section>

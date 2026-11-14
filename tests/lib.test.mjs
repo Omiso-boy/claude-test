@@ -119,3 +119,45 @@ test('mergeSets: 同じIDは追加しない', () => {
   assert.equal(r.skipped, 1);
   assert.equal(r.sets.length, 2);
 });
+
+import { startTimer, remainingMs, isFinished, pauseTimer, resumeTimer, resetTimer, normalizeTimer, formatClock, TIMER_IDLE } from '../app/lib.js';
+
+test('タイマー: 絶対時刻で残りを計算し、0未満にならない', () => {
+  const t = startTimer(90, 1000);
+  assert.equal(remainingMs(t, 1000), 90000);
+  assert.equal(remainingMs(t, 61000), 30000);
+  assert.equal(isFinished(t, 90999), false);
+  assert.equal(isFinished(t, 91000), true);
+  assert.equal(remainingMs(t, 999999), 0);
+});
+
+test('タイマー: 一時停止中は減らず、再開後に続きから減る', () => {
+  let t = startTimer(60, 0);
+  t = pauseTimer(t, 20000);
+  assert.equal(t.status, 'paused');
+  assert.equal(remainingMs(t, 500000), 40000);
+  t = resumeTimer(t, 500000);
+  assert.equal(remainingMs(t, 510000), 30000);
+  assert.equal(pauseTimer(startTimer(10, 0), 10000).status, 'running', '終了後は一時停止しない');
+});
+
+test('タイマー: リセットは秒数設定を保つ', () => {
+  const t = resetTimer(startTimer(120, 0));
+  assert.equal(t.status, 'idle');
+  assert.equal(t.durationSec, 120);
+});
+
+test('タイマー: 壊れた保存データは待機状態に戻す', () => {
+  assert.deepEqual(normalizeTimer(null), TIMER_IDLE);
+  assert.deepEqual(normalizeTimer({ status: 'running', endAt: 'x' }), TIMER_IDLE);
+  assert.equal(normalizeTimer({ status: 'idle', durationSec: 60 }).durationSec, 60);
+  assert.equal(normalizeTimer({ status: 'idle', durationSec: -5 }).durationSec, 90);
+  assert.equal(normalizeTimer({ status: 'paused', pausedRemainingMs: 5000, durationSec: 60 }).status, 'paused');
+});
+
+test('formatClock: 切り上げ表示', () => {
+  assert.equal(formatClock(90000), '1:30');
+  assert.equal(formatClock(200), '0:01');
+  assert.equal(formatClock(0), '0:00');
+  assert.equal(formatClock(600000), '10:00');
+});

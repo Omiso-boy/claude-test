@@ -168,3 +168,24 @@ details summary::-webkit-details-marker { display: none; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--danger); color: #fff; }
+
+/* 休憩タイマー */
+.timer { text-align: center; }
+.timer-head { display: flex; justify-content: space-between; align-items: center; gap: 8px; text-align: left; }
+.timer-head .lbl { margin: 0; }
+.auto { display: flex; align-items: center; gap: 6px; font-size: 13px; color: var(--muted); min-height: 32px; }
+.auto input { width: 20px; height: 20px; margin: 0; accent-color: var(--accent); }
+.timer-clock { font-size: 56px; font-weight: 700; line-height: 1.1; margin: 6px 0 2px; font-variant-numeric: tabular-nums; }
+.timer.running .timer-clock { color: var(--accent); }
+.timer.finished { border-color: var(--accent); }
+.timer.finished .timer-clock { color: var(--accent); }
+.timer-status { min-height: 21px; font-size: 14px; color: var(--muted); font-weight: 600; }
+.timer.finished .timer-status { color: var(--accent); }
+.presets { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 10px 0; }
+.preset { min-height: 44px; border: 1px solid var(--border); border-radius: 10px; background: var(--chip); font-weight: 600; }
+.preset[aria-pressed="true"] { border-color: var(--accent); color: var(--accent); }
+.timer-ctrl { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+@media (prefers-reduced-motion: no-preference) {
+  .timer.finished { animation: pulse 1s ease-in-out 3; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 4px var(--accent); } }
+}

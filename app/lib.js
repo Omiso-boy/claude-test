@@ -198,3 +198,55 @@ export function mergeSets(existing, incoming) {
   }
   return { sets: [...existing, ...added], added: added.length, skipped };
 }
+
+// ---------- 休憩タイマー ----------
+// 残り時間は「終了予定の絶対時刻」から計算する。setInterval の回数に頼らないので、
+// 画面ロックやアプリの再起動をはさんでもずれない。
+// state: { status: 'idle'|'running'|'paused', endAt: ms|null, pausedRemainingMs: ms|null, durationSec }
+
+export const TIMER_IDLE = Object.freeze({ status: 'idle', endAt: null, pausedRemainingMs: null, durationSec: 90 });
+
+export function startTimer(durationSec, now) {
+  return { status: 'running', endAt: now + durationSec * 1000, pausedRemainingMs: null, durationSec };
+}
+
+export function remainingMs(state, now) {
+  if (state.status === 'running') return Math.max(0, state.endAt - now);
+  if (state.status === 'paused') return state.pausedRemainingMs;
+  return 0;
+}
+
+export function isFinished(state, now) {
+  return state.status === 'running' && now >= state.endAt;
+}
+
+export function pauseTimer(state, now) {
+  if (state.status !== 'running' || isFinished(state, now)) return state;
+  return { ...state, status: 'paused', endAt: null, pausedRemainingMs: remainingMs(state, now) };
+}
+
+export function resumeTimer(state, now) {
+  if (state.status !== 'paused') return state;
+  return { ...state, status: 'running', endAt: now + state.pausedRemainingMs, pausedRemainingMs: null };
+}
+
+export function resetTimer(state) {
+  return { ...TIMER_IDLE, durationSec: state.durationSec };
+}
+
+/** 保存データが壊れていても安全な状態に戻す */
+export function normalizeTimer(raw) {
+  const d = Number(raw?.durationSec);
+  const durationSec = Number.isInteger(d) && d > 0 && d <= 3600 ? d : TIMER_IDLE.durationSec;
+  if (raw?.status === 'running' && Number.isFinite(raw.endAt)) return { status: 'running', endAt: raw.endAt, pausedRemainingMs: null, durationSec };
+  if (raw?.status === 'paused' && Number.isFinite(raw.pausedRemainingMs) && raw.pausedRemainingMs >= 0) {
+    return { status: 'paused', endAt: null, pausedRemainingMs: raw.pausedRemainingMs, durationSec };
+  }
+  return { ...TIMER_IDLE, durationSec };
+}
+
+/** ミリ秒 → m:ss（端数は切り上げ。残り0.2秒なら 0:01） */
+export function formatClock(ms) {
+  const total = Math.ceil(ms / 1000);
+  return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}

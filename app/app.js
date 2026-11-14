@@ -2,6 +2,7 @@
 import {
   validateSet, groupByDate, previousSession, exerciseNames, formatWeight,
   toDateKey, toCsv, fromCsv, mergeSets, roundWeight,
+  startTimer, pauseTimer, resumeTimer, resetTimer, remainingMs, isFinished, normalizeTimer, formatClock,
 } from './lib.js';
 
 const KEY_SETS = 'kintore.v1.sets';
@@ -140,6 +141,7 @@ form.addEventListener('submit', (e) => {
     fNote.value = '';
     toast('記録しました');
     render();
+    if (timerAuto) timerStart(timer.durationSec);
   }
 });
 
@@ -177,6 +179,94 @@ function renderReminder() {
   const days = (Date.now() - Date.parse(since)) / 86400000;
   $('#reminder').hidden = !(sets.length > 0 && days >= BACKUP_REMIND_DAYS);
 }
+
+// ---------- 休憩タイマー ----------
+const KEY_TIMER = 'kintore.v1.timer';
+const KEY_TIMER_AUTO = 'kintore.v1.timerAuto';
+
+function loadJson(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
+}
+function saveJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* タイマーは保存できなくても動作は続ける */ }
+}
+
+let timer = normalizeTimer(loadJson(KEY_TIMER));
+let timerAuto = loadJson(KEY_TIMER_AUTO) ?? true;
+let timerTick = null;
+let finishNotified = isFinished(timer, Date.now()); // 再起動時、終了済みなら音を鳴らさない
+let audioCtx = null;
+
+function setTimer(next) {
+  timer = next;
+  saveJson(KEY_TIMER, timer);
+  finishNotified = isFinished(timer, Date.now());
+  renderTimer();
+}
+
+/** iPhoneでは、ユーザー操作の中で一度鳴らす準備をしないと後から音を出せない */
+function unlockAudio() {
+  try {
+    audioCtx ??= new (window.AudioContext || window.webkitAudioContext)();
+    if (audioCtx.state === 'suspended') audioCtx.resume();
+  } catch { audioCtx = null; }
+}
+
+function beep() {
+  if (!audioCtx) return;
+  try {
+    const t0 = audioCtx.currentTime;
+    [0, 0.25, 0.5].forEach((d) => {
+      const o = audioCtx.createOscillator();
+      const g = audioCtx.createGain();
+      o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t0 + d);
+      g.gain.exponentialRampToValueAtTime(0.3, t0 + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t0 + d + 0.18);
+      o.connect(g).connect(audioCtx.destination);
+      o.start(t0 + d);
+      o.stop(t0 + d + 0.2);
+    });
+  } catch { /* 音が出せなくても画面表示で知らせる */ }
+  navigator.vibrate?.([200, 100, 200]);
+}
+
+function timerStart(sec) {
+  unlockAudio();
+  setTimer(startTimer(sec, Date.now()));
+}
+
+function renderTimer() {
+  const now = Date.now();
+  const finished = isFinished(timer, now);
+  const box = $('#timer');
+  box.classList.toggle('running', timer.status === 'running' && !finished);
+  box.classList.toggle('finished', finished);
+  $('#timer-clock').textContent = formatClock(timer.status === 'idle' ? timer.durationSec * 1000 : remainingMs(timer, now));
+  $('#timer-status').textContent = finished ? '休憩終了！' : timer.status === 'paused' ? '一時停止中' : timer.status === 'running' ? '休憩中…' : '';
+  $('#timer-toggle').textContent = timer.status === 'running' && !finished ? '一時停止' : timer.status === 'paused' ? '再開' : 'スタート';
+  document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.sec) === timer.durationSec)));
+  $('#timer-auto').checked = timerAuto;
+
+  if (finished && !finishNotified) { finishNotified = true; beep(); }
+
+  const shouldTick = timer.status === 'running' && !finished;
+  if (shouldTick && !timerTick) timerTick = setInterval(renderTimer, 250);
+  if (!shouldTick && timerTick) { clearInterval(timerTick); timerTick = null; }
+}
+
+document.querySelectorAll('.preset').forEach((b) => b.addEventListener('click', () => timerStart(Number(b.dataset.sec))));
+$('#timer-toggle').addEventListener('click', () => {
+  const now = Date.now();
+  unlockAudio();
+  if (timer.status === 'running' && !isFinished(timer, now)) setTimer(pauseTimer(timer, now));
+  else if (timer.status === 'paused') setTimer(resumeTimer(timer, now));
+  else timerStart(timer.durationSec);
+});
+$('#timer-reset').addEventListener('click', () => setTimer(resetTimer(timer)));
+$('#timer-auto').addEventListener('change', (e) => { timerAuto = e.target.checked; saveJson(KEY_TIMER_AUTO, timerAuto); });
+form.addEventListener('submit', unlockAudio, { capture: true });
+document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderTimer(); });
 
 // ---------- 履歴タブ ----------
 function renderHistory() {
@@ -257,6 +347,7 @@ function render() {
 }
 
 render();
+renderTimer();
 
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
