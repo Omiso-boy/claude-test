@@ -302,3 +302,11 @@ details summary::-webkit-details-marker { display: none; }
 .toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; }
 .toast-action { border: none; background: none; color: var(--accent); font-weight: 700; min-height: 40px; padding: 0 12px; white-space: nowrap; }
 @media (prefers-reduced-motion: reduce) { .toast { transition: none; } }
+
+/* ---------- 起動失敗時 ---------- */
+.boot-error {
+  position: fixed; inset: auto 16px calc(84px + env(safe-area-inset-bottom)); z-index: 30;
+  background: var(--surface); border: 1px solid var(--danger); border-radius: 16px; padding: 14px;
+  text-align: center; box-shadow: 0 8px 24px rgba(0, 0, 0, .3);
+}
+.boot-error p { margin: 0 0 10px; }

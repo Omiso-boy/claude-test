@@ -518,6 +518,10 @@ function render() {
 render();
 renderTimer();
 
+// 起動できたことを index.html の見張り役に知らせる
+window.__kintoreReady = true;
+try { sessionStorage.removeItem('kintore.recovering'); } catch { /* 無視 */ }
+
 if ('serviceWorker' in navigator && location.protocol === 'https:') {
   navigator.serviceWorker.register('sw.js').catch(() => {});
 }

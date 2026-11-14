@@ -138,6 +138,31 @@
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>
 
+  <div id="boot-error" class="boot-error" hidden>
+    <p>アプリを起動できませんでした。<br>古いファイルが残っている可能性があります。</p>
+    <button type="button" id="boot-reload" class="btn primary">更新して再読み込み</button>
+  </div>
+
   <script type="module" src="app.js"></script>
+  <script>
+    // 起動の見張り役：app.js が数秒たっても起動しなければ、ファイルを取り直して再読み込みする。
+    // 新旧のファイルが混ざってプログラムが止まった場合の自動復旧用（1回だけ自動、2回目はボタンを表示）。
+    (function () {
+      var FILES = ['./', 'index.html', 'app.js', 'lib.js', 'icons.js', 'style.css', 'sw.js'];
+      function refresh() {
+        var jobs = FILES.map(function (f) { return fetch(f, { cache: 'reload' }).catch(function () {}); });
+        if (window.caches) jobs.push(caches.keys().then(function (ks) { return Promise.all(ks.map(function (k) { return caches.delete(k); })); }).catch(function () {}));
+        return Promise.all(jobs).then(function () { location.reload(); });
+      }
+      document.getElementById('boot-reload').addEventListener('click', refresh);
+      setTimeout(function () {
+        if (window.__kintoreReady) return;
+        var tried = false;
+        try { tried = sessionStorage.getItem('kintore.recovering') === '1'; sessionStorage.setItem('kintore.recovering', '1'); } catch (e) { tried = true; }
+        if (!tried) refresh();
+        else document.getElementById('boot-error').hidden = false;
+      }, 4000);
+    })();
+  </script>
 </body>
 </html>
