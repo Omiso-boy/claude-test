@@ -3,6 +3,7 @@
 ## プロジェクト概要
 - 目的：iPhoneのホーム画面で使う、シンプルな筋トレ記録Webアプリ（PWA）。機能は最小限に保つ。
 - 利用者：自分のみ
+- 公開URL：https://omiso-boy.github.io/kintore-log/ （リポジトリ：Omiso-boy/kintore-log。旧名 claude-test）
 - 技術スタック：HTML / CSS / JavaScript（ES Modules）、ビルド不要、外部ライブラリなし
 - データ保存：端末内（localStorage）＋ CSVバックアップ。将来 Firebase 同期を追加する可能性あり
 - テスト：`npm test`（Node.js 18以上。`app/lib.js` の単体テスト）
