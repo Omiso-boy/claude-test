@@ -215,3 +215,36 @@ test('CSV: 部位を書き出し、読み込み時に返す。部位列のない
   assert.equal(old.sets.length, 1);
   assert.equal(old.parts.size, 0);
 });
+
+import { equipmentOf, daySummary, exerciseStats } from '../app/lib.js';
+
+test('equipmentOf: 用意済み種目はすべて器具が決まっている（首・その他を除く）', () => {
+  for (const [part, names] of Object.entries(PRESET_EXERCISES)) {
+    if (part === 'neck' || part === 'other') continue;
+    for (const n of names) assert.ok(equipmentOf(n), `${n} の器具が未設定`);
+  }
+  assert.equal(equipmentOf('自作の種目'), null);
+});
+
+test('daySummary: セット数・種目数・部位・時間', () => {
+  const s = [
+    mk({ date: '2026-11-14', exercise: 'ベンチプレス', createdAt: '2026-11-14T10:00:00Z' }),
+    mk({ date: '2026-11-14', exercise: 'ベンチプレス', createdAt: '2026-11-14T10:05:00Z' }),
+    mk({ date: '2026-11-14', exercise: 'ダンベルカール', createdAt: '2026-11-14T10:45:00Z' }),
+    mk({ date: '2026-11-13', exercise: 'スクワット' }),
+  ];
+  assert.deepEqual(daySummary(s, '2026-11-14'), { setCount: 3, exerciseCount: 2, parts: ['chest', 'arms'], minutes: 45 });
+  assert.deepEqual(daySummary(s, '2026-11-13'), { setCount: 1, exerciseCount: 1, parts: ['legs'], minutes: null });
+  assert.deepEqual(daySummary([], '2026-11-14'), { setCount: 0, exerciseCount: 0, parts: [], minutes: null });
+});
+
+test('exerciseStats: 当日があれば当日、なければ前回', () => {
+  const s = [
+    mk({ date: '2026-11-10', weight: '70', reps: '10' }),
+    mk({ date: '2026-11-10', weight: '80', reps: '8' }),
+    mk({ date: '2026-11-14', weight: '82.5', reps: '6' }),
+  ];
+  assert.deepEqual(exerciseStats(s, 'ベンチプレス', '2026-11-12'), { date: '2026-11-10', sets: 2, repsMin: 8, repsMax: 10, maxWeight: 80 });
+  assert.equal(exerciseStats(s, 'ベンチプレス', '2026-11-14').sets, 1);
+  assert.equal(exerciseStats(s, 'スクワット', '2026-11-14'), null);
+});

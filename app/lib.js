@@ -329,3 +329,51 @@ export function planRows(prevSets, done) {
   }
   return rows;
 }
+
+// ---------- 器具の種類（アイコンの描き分け用） ----------
+const EQUIPMENT = {
+  barbell: ['ベンチプレス', 'インクラインベンチプレス', 'デッドリフト', 'ベントオーバーロウ', 'ショルダープレス', 'アップライトロウ', 'バーベルカール', 'ナローベンチプレス', 'スクワット'],
+  dumbbell: ['ダンベルプレス', 'ダンベルフライ', 'ワンハンドロウ', 'ダンベルショルダープレス', 'サイドレイズ', 'フロントレイズ', 'リアレイズ', 'シュラッグ', 'ダンベルカール', 'ハンマーカール', 'トライセプスエクステンション', 'ランジ', 'ブルガリアンスクワット'],
+  machine: ['バタフライ', 'ケーブルクロスオーバー', 'ラットプルダウン', 'シーテッドロー', 'トライセプスプッシュダウン', 'レッグプレス', 'レッグエクステンション', 'レッグカール', 'カーフレイズ'],
+  bodyweight: ['プッシュアップ', 'ディップス', '懸垂', 'バックエクステンション', 'クランチ', 'レッグレイズ', 'アブローラー', 'シットアップ'],
+};
+
+/** 用意済み種目の器具。わからなければ null（部位のアイコンを使う） */
+export function equipmentOf(name) {
+  for (const [kind, names] of Object.entries(EQUIPMENT)) if (names.includes(name)) return kind;
+  return null;
+}
+
+// ---------- 集計 ----------
+/**
+ * 指定日のまとめ。minutes は最初のセットから最後のセットまでの分数（2セット未満は null）
+ */
+export function daySummary(sets, date, custom = []) {
+  const day = sets.filter((s) => s.date === date);
+  const exercises = [...new Set(sortSets(day).map((s) => s.exercise))];
+  const parts = [...new Set(exercises.map((n) => partOf(n, custom)))];
+  let minutes = null;
+  if (day.length >= 2) {
+    const times = day.map((s) => Date.parse(s.createdAt)).filter(Number.isFinite);
+    if (times.length >= 2) minutes = Math.round((Math.max(...times) - Math.min(...times)) / 60000);
+  }
+  return { setCount: day.length, exerciseCount: exercises.length, parts, minutes };
+}
+
+/**
+ * 種目一覧に出す数値。指定日に記録があればその日、なければ前回の記録から。
+ * @returns {{date, sets, repsMin, repsMax, maxWeight} | null}
+ */
+export function exerciseStats(sets, name, date) {
+  const today = sets.filter((s) => s.exercise === name && s.date === date);
+  const src = today.length ? { date, sets: today } : previousSession(sets, name, date);
+  if (!src) return null;
+  const reps = src.sets.map((s) => s.reps);
+  return {
+    date: src.date,
+    sets: src.sets.length,
+    repsMin: Math.min(...reps),
+    repsMax: Math.max(...reps),
+    maxWeight: Math.max(...src.sets.map((s) => s.weight)),
+  };
+}

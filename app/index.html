@@ -16,7 +16,22 @@
 </head>
 <body>
   <header class="top">
-    <h1>筋トレ記録</h1>
+    <div class="brand">
+      <span class="logo" data-icon="logo"></span>
+      <div>
+        <h1>筋トレ記録</h1>
+        <div class="brand-sub" id="brand-sub">本日のワークアウト</div>
+      </div>
+    </div>
+    <div class="date-nav" id="date-nav">
+      <button type="button" id="date-prev" class="date-arrow" aria-label="前の日" data-icon="chevronLeft"></button>
+      <label class="date-label">
+        <span class="date-cal" data-icon="calendar"></span>
+        <span id="date-text"></span>
+        <input type="date" id="f-date" required aria-label="日付を選ぶ">
+      </label>
+      <button type="button" id="date-next" class="date-arrow" aria-label="次の日" data-icon="chevronRight"></button>
+    </div>
   </header>
 
   <main>
@@ -27,30 +42,38 @@
         <button type="button" id="reminder-btn" class="btn small">今すぐ</button>
       </div>
 
-      <div class="record-bar">
-        <label class="date-pick"><span class="lbl">日付</span><input type="date" id="f-date" required></label>
-      </div>
+      <section id="summary" class="card summary" aria-label="今日のまとめ">
+        <div id="summary-body" class="summary-body" aria-hidden="true"></div>
+        <div class="summary-info">
+          <span id="summary-badge" class="badge"></span>
+          <div class="stats">
+            <div class="stat"><span class="stat-lbl"><span data-icon="check"></span>セット</span><span class="stat-val" id="stat-sets">0</span></div>
+            <div class="stat"><span class="stat-lbl"><span data-icon="record"></span>種目</span><span class="stat-val" id="stat-ex">0</span></div>
+            <div class="stat"><span class="stat-lbl"><span data-icon="hourglass"></span>時間</span><span class="stat-val" id="stat-time">−</span></div>
+          </div>
+        </div>
+      </section>
 
-      <section id="timer" class="timer" aria-label="休憩タイマー">
-        <div class="timer-main">
+      <section id="timer" class="card timer" aria-label="休憩タイマー">
+        <div class="timer-title"><span data-icon="timer"></span>インターバルタイマー<span id="timer-status" class="timer-status" aria-live="polite"></span></div>
+        <div class="timer-row">
           <div id="timer-clock" class="timer-clock" role="timer" aria-live="off">1:30</div>
-          <div id="timer-status" class="timer-status" aria-live="polite">休憩タイマー</div>
+          <div class="presets">
+            <button type="button" class="preset" data-sec="60">60</button>
+            <button type="button" class="preset" data-sec="90">90</button>
+            <button type="button" class="preset" data-sec="120">120</button>
+          </div>
+          <button type="button" id="timer-toggle" class="timer-btn play" aria-label="スタート"></button>
+          <button type="button" id="timer-reset" class="timer-btn" aria-label="リセット" data-icon="reset"></button>
         </div>
-        <div class="presets">
-          <button type="button" class="preset" data-sec="60">60</button>
-          <button type="button" class="preset" data-sec="90">90</button>
-          <button type="button" class="preset" data-sec="120">120</button>
-        </div>
-        <button type="button" id="timer-toggle" class="timer-btn" aria-label="スタート">▶</button>
-        <button type="button" id="timer-reset" class="timer-btn" aria-label="リセット">↺</button>
       </section>
 
       <!-- 種目を選ぶ -->
       <div id="pick-screen">
-        <div id="today-box" class="card today" hidden>
-          <div class="lbl" id="today-title"></div>
-          <div id="today-list" class="today-list"></div>
-        </div>
+        <section id="today-box" class="card today" hidden>
+          <div class="card-title"><span data-icon="clipboard"></span>今日の記録<span id="today-date" class="card-title-sub"></span></div>
+          <ul id="today-list" class="today-list"></ul>
+        </section>
 
         <div id="part-tabs" class="part-tabs" role="tablist" aria-label="部位"></div>
         <ul id="exercise-list" class="ex-list"></ul>
@@ -68,8 +91,8 @@
       <!-- 種目ごとの記録 -->
       <div id="exercise-screen" hidden>
         <div class="ex-head">
-          <button type="button" id="back-btn" class="back">‹ 種目一覧</button>
-          <h2 id="ex-title"></h2>
+          <button type="button" id="back-btn" class="back"><span data-icon="chevronLeft"></span>種目一覧</button>
+          <div class="ex-title-row"><span id="ex-icon" class="ex-icon"></span><div><h2 id="ex-title"></h2><span id="ex-part" class="ex-part"></span></div></div>
         </div>
 
         <div id="previous" class="previous" hidden></div>
@@ -111,9 +134,9 @@
   </main>
 
   <nav class="tabs" role="tablist">
-    <button class="tab" role="tab" data-view="view-record" aria-selected="true">記録</button>
-    <button class="tab" role="tab" data-view="view-history" aria-selected="false">履歴</button>
-    <button class="tab" role="tab" data-view="view-backup" aria-selected="false">バックアップ</button>
+    <button class="tab" role="tab" data-view="view-record" aria-selected="true"><span data-icon="record"></span>記録</button>
+    <button class="tab" role="tab" data-view="view-history" aria-selected="false"><span data-icon="history"></span>履歴</button>
+    <button class="tab" role="tab" data-view="view-backup" aria-selected="false"><span data-icon="backup"></span>バックアップ</button>
   </nav>
 
   <div id="toast" class="toast" role="status" aria-live="polite"></div>

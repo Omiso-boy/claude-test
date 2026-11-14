@@ -1,8 +1,8 @@
 // オフラインでも起動できるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げること（古いキャッシュが削除される）。
-const VERSION = 'v4';
+const VERSION = 'v5';
 const CACHE = `kintore-${VERSION}`;
-const FILES = ['./', 'index.html', 'style.css', 'app.js', 'lib.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
+const FILES = ['./', 'index.html', 'style.css', 'app.js', 'lib.js', 'icons.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
 self.addEventListener('install', (e) => {
   e.waitUntil(caches.open(CACHE).then((c) => c.addAll(FILES)).then(() => self.skipWaiting()));
