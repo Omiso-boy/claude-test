@@ -107,8 +107,49 @@
 
     <!-- 履歴 -->
     <section id="view-history" class="view" hidden>
-      <h2 class="section-title">履歴</h2>
-      <div id="history-list"></div>
+      <div class="seg" role="tablist" aria-label="履歴の表示">
+        <button type="button" class="seg-btn" role="tab" data-hview="h-calendar" aria-selected="true">カレンダー</button>
+        <button type="button" class="seg-btn" role="tab" data-hview="h-load" aria-selected="false">週間負荷</button>
+      </div>
+
+      <!-- カレンダー -->
+      <div id="h-calendar" class="hview">
+        <section class="card cal-card">
+          <div class="nav-row">
+            <button type="button" id="cal-prev" class="nav-arrow" aria-label="前の月" data-icon="chevronLeft"></button>
+            <h2 id="cal-title" class="nav-title"></h2>
+            <button type="button" id="cal-next" class="nav-arrow" aria-label="次の月" data-icon="chevronRight"></button>
+          </div>
+          <div class="cal-grid cal-head" aria-hidden="true"><span>月</span><span>火</span><span>水</span><span>木</span><span>金</span><span>土</span><span>日</span></div>
+          <div id="cal-grid" class="cal-grid" role="grid" aria-labelledby="cal-title"></div>
+          <p class="help cal-help">数字はその日のセット数。日付をタップすると記録が見られます。</p>
+        </section>
+        <div id="day-detail"></div>
+      </div>
+
+      <!-- 週間負荷 -->
+      <div id="h-load" class="hview" hidden>
+        <section class="card">
+          <div class="nav-row">
+            <button type="button" id="wk-prev" class="nav-arrow" aria-label="前の週" data-icon="chevronLeft"></button>
+            <h2 id="wk-title" class="nav-title"></h2>
+            <button type="button" id="wk-next" class="nav-arrow" aria-label="次の週" data-icon="chevronRight"></button>
+          </div>
+          <div class="seg seg-small" role="radiogroup" aria-label="指標">
+            <button type="button" class="seg-btn" role="radio" data-metric="sets" aria-checked="true">セット数</button>
+            <button type="button" class="seg-btn" role="radio" data-metric="volume" aria-checked="false">ボリューム</button>
+          </div>
+          <h3 class="chart-title" id="load-title"></h3>
+          <div id="load-bars" class="hbars"></div>
+          <p id="load-note" class="help"></p>
+        </section>
+
+        <section class="card">
+          <h3 class="chart-title" id="trend-title"></h3>
+          <p class="help trend-help">棒をタップすると、その週の値が出ます。</p>
+          <div id="trend-grid" class="trend-grid"></div>
+        </section>
+      </div>
     </section>
 
     <!-- バックアップ -->

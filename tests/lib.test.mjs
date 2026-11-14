@@ -248,3 +248,52 @@ test('exerciseStats: 当日があれば当日、なければ前回', () => {
   assert.equal(exerciseStats(s, 'ベンチプレス', '2026-11-14').sets, 1);
   assert.equal(exerciseStats(s, 'スクワット', '2026-11-14'), null);
 });
+
+import { addDays, weekStart, monthGrid, setCountsByDate, weeklyLoad, weeklyTrend } from '../app/lib.js';
+
+test('addDays / weekStart: 月またぎ・年またぎ・月曜始まり', () => {
+  assert.equal(addDays('2026-11-30', 1), '2026-12-01');
+  assert.equal(addDays('2026-01-01', -1), '2025-12-31');
+  assert.equal(weekStart('2026-11-14'), '2026-11-09'); // 土曜 → 月曜
+  assert.equal(weekStart('2026-11-09'), '2026-11-09'); // 月曜はそのまま
+  assert.equal(weekStart('2026-11-15'), '2026-11-09'); // 日曜は前の月曜
+  assert.equal(weekStart('2027-01-01'), '2026-12-28');
+});
+
+test('monthGrid: 月曜始まりで全日を含み、週は7日', () => {
+  const g = monthGrid(2026, 11); // 2026/11/1 は日曜
+  assert.ok(g.every((w) => w.length === 7));
+  assert.deepEqual(g[0], [null, null, null, null, null, null, '2026-11-01']);
+  assert.equal(g.flat().filter(Boolean).length, 30);
+  assert.equal(g.flat().filter(Boolean).at(-1), '2026-11-30');
+  assert.equal(monthGrid(2027, 2).flat().filter(Boolean).length, 28);
+});
+
+test('setCountsByDate', () => {
+  const m = setCountsByDate([mk({ date: '2026-11-14' }), mk({ date: '2026-11-14' }), mk({ date: '2026-11-10' })]);
+  assert.equal(m.get('2026-11-14'), 2);
+  assert.equal(m.get('2026-11-10'), 1);
+});
+
+test('weeklyLoad: 週の範囲・部位別のセット数とボリューム', () => {
+  const s = [
+    mk({ date: '2026-11-09', exercise: 'ベンチプレス', weight: '60', reps: '10' }),  // 月曜：含む
+    mk({ date: '2026-11-15', exercise: 'ベンチプレス', weight: '62.5', reps: '8' }), // 日曜：含む
+    mk({ date: '2026-11-16', exercise: 'ベンチプレス', weight: '100', reps: '1' }),  // 翌週：含まない
+    mk({ date: '2026-11-10', exercise: '懸垂', weight: '0', reps: '10' }),          // 自重：ボリューム0
+    mk({ date: '2026-11-11', exercise: '謎の種目', weight: '10', reps: '3' }),
+  ];
+  const w = weeklyLoad(s, [], '2026-11-09');
+  assert.deepEqual(w.chest, { sets: 2, volume: 1100 });
+  assert.deepEqual(w.back, { sets: 1, volume: 0 });
+  assert.deepEqual(w.other, { sets: 1, volume: 30 });
+  assert.deepEqual(w.legs, { sets: 0, volume: 0 });
+  assert.equal(Object.keys(w).length, 8);
+});
+
+test('weeklyTrend: 古い順に n 週', () => {
+  const t = weeklyTrend([mk({ date: '2026-11-02', weight: '50', reps: '10' })], [], '2026-11-09', 3);
+  assert.deepEqual(t.map((x) => x.week), ['2026-10-26', '2026-11-02', '2026-11-09']);
+  assert.equal(t[1].load.chest.sets, 1);
+  assert.equal(t[2].load.chest.sets, 0);
+});

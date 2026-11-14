@@ -5,6 +5,7 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, remainingMs, isFinished, normalizeTimer, formatClock,
   PARTS, partOf, validateCustomExercise, exercisesForPart, planRows,
   equipmentOf, daySummary, exerciseStats,
+  addDays, weekStart, monthGrid, setCountsByDate, weeklyLoad, weeklyTrend,
 } from './lib.js';
 import { PART_ICONS, EQUIPMENT_ICONS, UI_ICONS, muscleFigures } from './icons.js';
 
@@ -424,17 +425,171 @@ $('#timer-auto').addEventListener('change', (e) => { timerAuto = e.target.checke
 document.addEventListener('pointerdown', unlockAudio, { capture: true });
 
 // ---------- 履歴タブ ----------
+const SVG_NS = 'http://www.w3.org/2000/svg';
+function svgEl(tag, attrs = {}) {
+  const n = document.createElementNS(SVG_NS, tag);
+  for (const [k, v] of Object.entries(attrs)) n.setAttribute(k, String(v));
+  return n;
+}
+const shortDate = (key) => { const [, m, d] = key.split('-').map(Number); return `${m}/${d}`; };
+
+let hView = 'h-calendar';
+let calYear;
+let calMonth;
+let calSelected = toDateKey();
+{ const t = new Date(); calYear = t.getFullYear(); calMonth = t.getMonth() + 1; }
+let wkStart = weekStart(toDateKey());
+let metric = 'sets';
+const trendPick = {}; // 部位 → タップした週（小さなグラフの見出しに出す）
+
+document.querySelectorAll('[data-hview]').forEach((b) => b.addEventListener('click', () => {
+  hView = b.dataset.hview;
+  renderHistory();
+}));
+
+// --- カレンダー ---
+function shiftMonth(n) {
+  const d = new Date(calYear, calMonth - 1 + n, 1);
+  calYear = d.getFullYear();
+  calMonth = d.getMonth() + 1;
+  renderCalendar();
+}
+$('#cal-prev').addEventListener('click', () => shiftMonth(-1));
+$('#cal-next').addEventListener('click', () => shiftMonth(1));
+
+function renderCalendar() {
+  $('#cal-title').textContent = `${calYear}年${calMonth}月`;
+  const counts = setCountsByDate(sets);
+  const today = toDateKey();
+  const cells = monthGrid(calYear, calMonth).flat().map((key) => {
+    if (!key) return el('span', { class: 'cal-day blank', 'aria-hidden': 'true' });
+    const n = counts.get(key) ?? 0;
+    const day = Number(key.slice(8));
+    // セット数で濃さを3段階に（1〜9 / 10〜19 / 20以上）
+    const level = n === 0 ? 0 : n < 10 ? 1 : n < 20 ? 2 : 3;
+    return el('button', {
+      type: 'button',
+      class: `cal-day lv${level}${key === today ? ' today' : ''}${key === calSelected ? ' selected' : ''}`,
+      'aria-label': `${calMonth}月${day}日${n ? ` ${n}セット` : ' 記録なし'}`,
+      'aria-pressed': String(key === calSelected),
+      onclick: () => { calSelected = key; renderCalendar(); },
+    }, el('span', { class: 'cal-num' }, String(day)), el('span', { class: 'cal-cnt' }, n ? String(n) : ''));
+  });
+  $('#cal-grid').replaceChildren(...cells);
+  renderDayDetail();
+}
+
+function renderDayDetail() {
+  const box = $('#day-detail');
+  const day = groupByDate(sets.filter((s) => s.date === calSelected))[0];
+  const title = el('div', { class: 'card-title' }, el('span', {}, formatDate(calSelected)));
+  if (!day) {
+    box.replaceChildren(el('section', { class: 'card' }, title,
+      el('p', { class: 'empty' }, 'この日の記録はありません'),
+      el('button', { type: 'button', class: 'btn', onclick: () => goRecord(calSelected) }, 'この日の記録をつける')));
+    return;
+  }
+  const parts = [...new Set(day.exercises.map((ex) => partLabel(partOf(ex.name, custom))))];
+  title.append(el('span', { class: 'card-title-sub' }, `${parts.join('・')} ／ ${day.exercises.reduce((n, ex) => n + ex.sets.length, 0)}セット`));
+  box.replaceChildren(el('section', { class: 'card' }, title,
+    day.exercises.map((ex) => el('div', { class: 'h-ex' },
+      el('h3', {}, ex.name, el('span', { class: 'h-part' }, partLabel(partOf(ex.name, custom)))),
+      el('ol', { class: 'sets' }, ex.sets.map((s, i) => setLine(s, i, deleteSet))))),
+    el('button', { type: 'button', class: 'btn ghost', onclick: () => goRecord(calSelected) }, 'この日の記録を追加・編集')));
+}
+
+/** 記録タブを指定日で開く */
+function goRecord(date) {
+  fDate.value = date;
+  currentExercise = null;
+  rows = [];
+  $('#exercise-screen').hidden = true;
+  $('#pick-screen').hidden = false;
+  document.querySelector('.tab[data-view="view-record"]').click();
+  render();
+}
+
+// --- 週間負荷 ---
+$('#wk-prev').addEventListener('click', () => { wkStart = addDays(wkStart, -7); renderLoad(); });
+$('#wk-next').addEventListener('click', () => { wkStart = addDays(wkStart, 7); renderLoad(); });
+document.querySelectorAll('[data-metric]').forEach((b) => b.addEventListener('click', () => { metric = b.dataset.metric; renderLoad(); }));
+
+const formatMetric = (v) => (metric === 'sets' ? `${v}セット` : `${Math.round(v).toLocaleString('ja-JP')}kg`);
+
+function renderLoad() {
+  const thisWeek = weekStart(toDateKey());
+  $('#wk-title').textContent = `${shortDate(wkStart)}〜${shortDate(addDays(wkStart, 6))}${wkStart === thisWeek ? '（今週）' : ''}`;
+  $('#wk-next').disabled = wkStart >= thisWeek;
+  document.querySelectorAll('[data-metric]').forEach((b) => b.setAttribute('aria-checked', String(b.dataset.metric === metric)));
+  $('#load-title').textContent = metric === 'sets' ? '部位別のセット数' : '部位別のボリューム（重量×回数）';
+  $('#load-note').textContent = metric === 'volume' ? '自重の種目（重量0kg）はボリュームに含まれません。セット数で比べてください。' : '';
+
+  const cur = weeklyLoad(sets, custom, wkStart);
+  const prev = weeklyLoad(sets, custom, addDays(wkStart, -7));
+  const max = Math.max(...PARTS.map((p) => cur[p.key][metric]), 0);
+  const bars = $('#load-bars');
+  if (max === 0) {
+    bars.replaceChildren(el('p', { class: 'empty' }, 'この週の記録はありません'));
+  } else {
+    bars.replaceChildren(...PARTS.map((p) => {
+      const v = cur[p.key][metric];
+      const pv = prev[p.key][metric];
+      return el('div', { class: 'hbar', role: 'img', 'aria-label': `${p.label} ${formatMetric(v)}（先週 ${formatMetric(pv)}）` },
+        el('span', { class: 'hbar-label' }, p.label),
+        el('span', { class: 'hbar-track' },
+          v > 0 ? el('span', { class: 'hbar-fill', style: `width:${Math.max(2, (v / max) * 100)}%` }) : null,
+          el('span', { class: 'hbar-val' }, v > 0 ? formatMetric(v) : '−')),
+        el('span', { class: 'hbar-prev' }, `先週 ${pv > 0 ? formatMetric(pv) : '−'}`));
+    }));
+  }
+  renderTrend();
+}
+
+function renderTrend() {
+  const N = 8;
+  const trend = weeklyTrend(sets, custom, wkStart, N);
+  $('#trend-title').textContent = `部位ごとの推移（直近${N}週・${metric === 'sets' ? 'セット数' : 'ボリューム'}）`;
+  $('.trend-help').textContent = '棒をタップすると、その週の値が出ます。記録のない部位は省略しています。';
+  // 部位どうしを比べられるよう、全グラフで同じ目盛りを使う
+  const max = Math.max(1, ...trend.flatMap((t) => PARTS.map((p) => t.load[p.key][metric])));
+  const W = 160; const H = 56; const slot = W / N; const barW = Math.min(14, slot - 4);
+  // 8週間ずっと記録のない部位は省略する
+  const shown = PARTS.filter((p) => trend.some((t) => t.load[p.key][metric] > 0 || t.load[p.key].sets > 0));
+  if (shown.length === 0) { $('#trend-grid').replaceChildren(el('p', { class: 'empty' }, 'この期間の記録はありません')); return; }
+  $('#trend-grid').replaceChildren(...shown.map((p) => {
+    const picked = trendPick[p.key] ?? N - 1;
+    const pv = trend[picked];
+    const head = el('div', { class: 'trend-head' },
+      el('span', { class: 'trend-part' }, p.label),
+      el('span', { class: 'trend-val' }, `${shortDate(pv.week)}週 ${formatMetric(pv.load[p.key][metric])}`));
+    const svg = svgEl('svg', { viewBox: `0 0 ${W} ${H + 2}`, class: 'trend-svg', role: 'img',
+      'aria-label': `${p.label}：${trend.map((t) => `${shortDate(t.week)}週 ${formatMetric(t.load[p.key][metric])}`).join('、')}` });
+    svg.append(svgEl('line', { x1: 0, x2: W, y1: H + 1, y2: H + 1, class: 'trend-base' }));
+    trend.forEach((t, i) => {
+      const v = t.load[p.key][metric];
+      const h = v > 0 ? Math.max(3, (v / max) * (H - 2)) : 0;
+      const x = i * slot + (slot - barW) / 2;
+      if (h > 0) {
+        const r = Math.min(4, h, barW / 2); // 上だけ角丸（4px）、下は直角
+        const y = H + 1 - h;
+        svg.append(svgEl('path', {
+          d: `M${x},${H + 1}V${y + r}Q${x},${y} ${x + r},${y}H${x + barW - r}Q${x + barW},${y} ${x + barW},${y + r}V${H + 1}Z`,
+          class: `trend-bar${i === N - 1 ? ' cur' : ''}${i === picked && trendPick[p.key] != null ? ' picked' : ''}`,
+        }));
+      }
+      // タップしやすいよう、棒より大きい透明の当たり判定
+      const hit = svgEl('rect', { x: i * slot, y: 0, width: slot, height: H + 2, class: 'trend-hit' });
+      hit.addEventListener('click', () => { trendPick[p.key] = i; renderTrend(); });
+      svg.append(hit);
+    });
+    return el('div', { class: 'trend-card' }, head, svg);
+  }));
+}
+
 function renderHistory() {
-  const box = $('#history-list');
-  const days = groupByDate(sets);
-  if (days.length === 0) { box.replaceChildren(el('p', { class: 'empty' }, 'まだ記録がありません')); return; }
-  box.replaceChildren(...days.map((d) =>
-    el('details', { class: 'card' },
-      el('summary', {}, el('span', { class: 'h-date' }, formatDate(d.date)), el('span', { class: 'h-sum' }, d.exercises.map((x) => x.name).join('・'))),
-      d.exercises.map((ex) => el('div', { class: 'h-ex' },
-        el('h3', {}, ex.name, el('span', { class: 'h-part' }, partLabel(partOf(ex.name, custom)))),
-        el('ol', { class: 'sets' }, ex.sets.map((s, i) => setLine(s, i, deleteSet))))),
-    )));
+  document.querySelectorAll('[data-hview]').forEach((b) => b.setAttribute('aria-selected', String(b.dataset.hview === hView)));
+  document.querySelectorAll('.hview').forEach((v) => { v.hidden = v.id !== hView; });
+  if (hView === 'h-calendar') renderCalendar(); else renderLoad();
 }
 
 // ---------- バックアップタブ ----------

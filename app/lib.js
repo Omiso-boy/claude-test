@@ -377,3 +377,69 @@ export function exerciseStats(sets, name, date) {
     maxWeight: Math.max(...src.sets.map((s) => s.weight)),
   };
 }
+
+// ---------- 日付の計算（ローカル日付 YYYY-MM-DD） ----------
+function parseKey(key) {
+  const [y, m, d] = key.split('-').map(Number);
+  return new Date(y, m - 1, d);
+}
+
+export function addDays(key, n) {
+  const d = parseKey(key);
+  d.setDate(d.getDate() + n);
+  return toDateKey(d);
+}
+
+/** その日を含む週の月曜日 */
+export function weekStart(key) {
+  const d = parseKey(key);
+  const offset = (d.getDay() + 6) % 7; // 月曜=0 … 日曜=6
+  return addDays(key, -offset);
+}
+
+/**
+ * 月のカレンダー（月曜始まり）。週ごとの配列で、月外の日は null。
+ * month は 1〜12
+ */
+export function monthGrid(year, month) {
+  const first = toDateKey(new Date(year, month - 1, 1));
+  const daysInMonth = new Date(year, month, 0).getDate();
+  const lead = (parseKey(first).getDay() + 6) % 7;
+  const cells = [...Array(lead).fill(null), ...Array.from({ length: daysInMonth }, (_, i) => addDays(first, i))];
+  while (cells.length % 7) cells.push(null);
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+  return weeks;
+}
+
+/** 日付 → その日のセット数 */
+export function setCountsByDate(sets) {
+  const m = new Map();
+  for (const s of sets) m.set(s.date, (m.get(s.date) ?? 0) + 1);
+  return m;
+}
+
+// ---------- 週間負荷 ----------
+/**
+ * 週（月曜始まり）の部位別負荷。sets=セット数、volume=Σ重量×回数（kg。自重0kgの種目は0）
+ * @returns {{ [part]: { sets: number, volume: number } }}  8部位すべてを含む
+ */
+export function weeklyLoad(sets, custom, weekStartKey) {
+  const end = addDays(weekStartKey, 7);
+  const out = Object.fromEntries(PARTS.map((p) => [p.key, { sets: 0, volume: 0 }]));
+  for (const s of sets) {
+    if (s.date < weekStartKey || s.date >= end) continue;
+    const o = out[partOf(s.exercise, custom)];
+    o.sets += 1;
+    o.volume = roundWeight(o.volume + s.weight * s.reps);
+  }
+  return out;
+}
+
+/** endWeekStartKey を最後とする直近 n 週の負荷（古い順） */
+export function weeklyTrend(sets, custom, endWeekStartKey, n = 8) {
+  return Array.from({ length: n }, (_, i) => {
+    const week = addDays(endWeekStartKey, -7 * (n - 1 - i));
+    return { week, load: weeklyLoad(sets, custom, week) };
+  });
+}
