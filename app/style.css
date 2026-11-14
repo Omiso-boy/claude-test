@@ -139,6 +139,8 @@ details summary::-webkit-details-marker { display: none; }
 }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 .toast.error { background: var(--danger); color: #fff; }
+.toast.has-action { pointer-events: auto; display: flex; align-items: center; gap: 12px; padding: 6px 6px 6px 16px; }
+.toast-action { border: none; background: none; color: var(--accent); font-weight: 700; min-height: 40px; padding: 0 12px; white-space: nowrap; }
 
 .btn.ghost { border-style: dashed; background: none; color: var(--muted); margin-top: 8px; min-height: 44px; }
 

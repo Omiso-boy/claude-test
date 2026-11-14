@@ -55,13 +55,22 @@ function el(tag, attrs = {}, ...children) {
 }
 
 let toastTimer;
-function toast(msg, isError = false) {
+/** action: { label, run } を渡すと、通知にボタンを付けて少し長めに表示する */
+function toast(msg, isError = false, action = null) {
   const t = $('#toast');
-  t.textContent = msg;
+  t.replaceChildren(el('span', {}, msg));
+  if (action) {
+    t.append(el('button', { type: 'button', class: 'toast-action', onclick: () => { hideToast(); action.run(); } }, action.label));
+  }
   t.classList.toggle('error', isError);
+  t.classList.toggle('has-action', !!action);
   t.classList.add('show');
   clearTimeout(toastTimer);
-  toastTimer = setTimeout(() => t.classList.remove('show'), 2200);
+  toastTimer = setTimeout(hideToast, action ? 5000 : 2200);
+}
+function hideToast() {
+  clearTimeout(toastTimer);
+  $('#toast').classList.remove('show', 'has-action');
 }
 
 function formatDate(key) {
@@ -83,9 +92,17 @@ function setLine(s, i, onDelete) {
   );
 }
 
+// 確認は出さずにすぐ削除し、通知の「元に戻す」で取り消せるようにする
 function deleteSet(s) {
-  if (!confirm(`${formatDate(s.date)} ${s.exercise}\n${formatWeight(s.weight)}kg × ${s.reps}回\nを削除しますか？`)) return;
-  if (saveSets(sets.filter((x) => x.id !== s.id))) { toast('削除しました'); render(); }
+  if (!saveSets(sets.filter((x) => x.id !== s.id))) return;
+  render();
+  toast(`${formatWeight(s.weight)}kg × ${s.reps}回 を削除しました`, false, {
+    label: '元に戻す',
+    run: () => {
+      if (sets.some((x) => x.id === s.id)) return;
+      if (saveSets([...sets, s])) { toast('元に戻しました'); render(); }
+    },
+  });
 }
 
 // ---------- 記録タブ：日付 ----------

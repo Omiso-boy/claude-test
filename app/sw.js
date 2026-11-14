@@ -1,6 +1,6 @@
 // オフラインでも起動できるように、アプリ本体をキャッシュする。
 // アプリを更新したら VERSION を上げること（古いキャッシュが削除される）。
-const VERSION = 'v3';
+const VERSION = 'v4';
 const CACHE = `kintore-${VERSION}`;
 const FILES = ['./', 'index.html', 'style.css', 'app.js', 'lib.js', 'manifest.webmanifest', 'icon-180.png', 'icon-192.png', 'icon-512.png'];
 
