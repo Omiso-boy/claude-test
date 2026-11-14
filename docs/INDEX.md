@@ -14,6 +14,7 @@ iPhoneのホーム画面に追加して使う筋トレ記録アプリ（PWA）�
 | `app/index.html` / `style.css` | 画面の構造と見た目 |
 | `app/sw.js` | オフライン起動用のキャッシュ。アプリ更新時は `VERSION` を上げる |
 | `app/manifest.webmanifest` / `icon-*.png` | ホーム画面追加用の情報とアイコン |
+| `.github/workflows/pages.yml` | main への反映時にテスト → `app/` を GitHub Pages に公開 |
 | `tests/` | `lib.js` の単体テスト（`npm test`） |
 | `CLAUDE.md` / `docs/` | ルール・作業ログ・設計判断 |
 
