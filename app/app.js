@@ -1,45 +1,42 @@
 // 筋トレ記録：画面の処理
 import {
-  validateSet, groupByDate, previousSession, exerciseNames, formatWeight,
-  toDateKey, toCsv, fromCsv, mergeSets, roundWeight,
+  validateSet, groupByDate, previousSession, formatWeight,
+  toDateKey, toCsv, fromCsv, mergeSets,
   startTimer, pauseTimer, resumeTimer, resetTimer, remainingMs, isFinished, normalizeTimer, formatClock,
+  PARTS, partOf, validateCustomExercise, exercisesForPart, planRows,
 } from './lib.js';
 
 const KEY_SETS = 'kintore.v1.sets';
+const KEY_CUSTOM = 'kintore.v1.customExercises';
 const KEY_BACKUP = 'kintore.v1.lastBackupAt';
+const KEY_TIMER = 'kintore.v1.timer';
+const KEY_TIMER_AUTO = 'kintore.v1.timerAuto';
+const KEY_PART = 'kintore.v1.lastPart';
 const BACKUP_REMIND_DAYS = 7;
-const WEIGHT_STEP = 2.5;
 
 // ---------- 保存 ----------
-function loadSets() {
-  try {
-    const raw = localStorage.getItem(KEY_SETS);
-    const data = raw ? JSON.parse(raw) : [];
-    return Array.isArray(data) ? data : [];
-  } catch {
-    return [];
-  }
+function loadJson(key) {
+  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
 }
+/** 保存に失敗したら false（容量不足・プライベートモードなど） */
+function saveJson(key, value) {
+  try { localStorage.setItem(key, JSON.stringify(value)); return true; } catch { return false; }
+}
+
+let sets = Array.isArray(loadJson(KEY_SETS)) ? loadJson(KEY_SETS) : [];
+let custom = Array.isArray(loadJson(KEY_CUSTOM)) ? loadJson(KEY_CUSTOM) : [];
 
 function saveSets(next) {
-  try {
-    localStorage.setItem(KEY_SETS, JSON.stringify(next));
-    sets = next;
-    return true;
-  } catch {
-    toast('保存できませんでした。空き容量を確認してください', true);
-    return false;
-  }
+  if (!saveJson(KEY_SETS, next)) { toast('保存できませんでした。空き容量を確認してください', true); return false; }
+  sets = next;
+  return true;
+}
+function saveCustom(next) {
+  if (!saveJson(KEY_CUSTOM, next)) { toast('保存できませんでした。空き容量を確認してください', true); return false; }
+  custom = next;
+  return true;
 }
 
-function getLastBackup() {
-  try { return localStorage.getItem(KEY_BACKUP); } catch { return null; }
-}
-function setLastBackup() {
-  try { localStorage.setItem(KEY_BACKUP, new Date().toISOString()); } catch { /* 表示用なので無視 */ }
-}
-
-let sets = loadSets();
 navigator.storage?.persist?.().catch(() => {});
 
 // ---------- 小物 ----------
@@ -48,9 +45,10 @@ const $ = (sel) => document.querySelector(sel);
 function el(tag, attrs = {}, ...children) {
   const n = document.createElement(tag);
   for (const [k, v] of Object.entries(attrs)) {
+    if (v == null || v === false) continue;
     if (k === 'class') n.className = v;
     else if (k.startsWith('on')) n.addEventListener(k.slice(2), v);
-    else n.setAttribute(k, v);
+    else n.setAttribute(k, v === true ? '' : v);
   }
   for (const c of children.flat()) if (c != null) n.append(c);
   return n;
@@ -74,6 +72,8 @@ function formatDate(key) {
   return key === today ? `今日 ${label}` : (y === Number(today.slice(0, 4)) ? label : `${y}/${label}`);
 }
 
+const partLabel = (key) => PARTS.find((p) => p.key === key)?.label ?? 'その他';
+
 function setLine(s, i, onDelete) {
   return el('li', { class: 'set' },
     el('span', { class: 'set-no' }, `${i + 1}`),
@@ -88,109 +88,191 @@ function deleteSet(s) {
   if (saveSets(sets.filter((x) => x.id !== s.id))) { toast('削除しました'); render(); }
 }
 
-// ---------- 記録タブ ----------
-const form = $('#record-form');
+// ---------- 記録タブ：日付 ----------
 const fDate = $('#f-date');
-const fExercise = $('#f-exercise');
-const fWeight = $('#f-weight');
-const fReps = $('#f-reps');
-const fNote = $('#f-note');
-
 fDate.value = toDateKey();
 
 // アプリを開いたまま日付が変わったら「今日」に追従する（過去日を選んでいた場合はそのまま）
 let shownToday = toDateKey();
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState !== 'visible') return;
+  renderTimer();
   const today = toDateKey();
   if (today === shownToday) return;
   if (fDate.value === shownToday) fDate.value = today;
   shownToday = today;
+  resetRows();
   render();
 });
+fDate.addEventListener('change', () => { resetRows(); render(); });
 
-function step(input, delta, isInt) {
-  const cur = Number(input.value) || 0;
-  const next = Math.max(isInt ? 1 : 0, cur + delta);
-  input.value = isInt ? String(Math.round(next)) : formatWeight(roundWeight(next));
-}
-$('#w-minus').onclick = () => step(fWeight, -WEIGHT_STEP, false);
-$('#w-plus').onclick = () => step(fWeight, WEIGHT_STEP, false);
-$('#r-minus').onclick = () => step(fReps, -1, true);
-$('#r-plus').onclick = () => step(fReps, 1, true);
+// ---------- 記録タブ：種目を選ぶ ----------
+let currentPart = PARTS.some((p) => p.key === loadJson(KEY_PART)) ? loadJson(KEY_PART) : PARTS[0].key;
+let currentExercise = null; // 種目画面を開いているときの種目名
+let rows = [];              // 種目画面の未記録の行 [{weight, reps, note, showNote}]
 
-/** 種目を選んだら、前回の最後のセットを入力欄の初期値にする */
-function prefillFromHistory() {
-  const name = fExercise.value.trim();
-  if (!name) return;
-  const sameDay = sets.filter((s) => s.exercise === name && s.date === fDate.value);
-  const prev = previousSession(sets, name, fDate.value);
-  const base = sameDay.length ? sameDay[sameDay.length - 1] : prev?.sets[prev.sets.length - 1];
-  if (base) { fWeight.value = formatWeight(base.weight); fReps.value = String(base.reps); }
+function renderPartTabs() {
+  $('#part-tabs').replaceChildren(...PARTS.map((p) => el('button', {
+    type: 'button', class: 'part-tab', role: 'tab', 'aria-selected': String(p.key === currentPart),
+    onclick: () => { currentPart = p.key; saveJson(KEY_PART, currentPart); renderPick(); },
+  }, p.label)));
 }
 
-fExercise.addEventListener('change', () => { prefillFromHistory(); renderPrevious(); });
-fExercise.addEventListener('input', renderPrevious);
-fDate.addEventListener('change', render);
+function renderExerciseList() {
+  const names = exercisesForPart(currentPart, custom, sets);
+  const list = $('#exercise-list');
+  if (names.length === 0) { list.replaceChildren(el('li', { class: 'empty' }, '下の「＋ 種目を追加」から登録できます')); return; }
+  const today = fDate.value;
+  list.replaceChildren(...names.map((name) => {
+    const doneToday = sets.filter((s) => s.exercise === name && s.date === today).length;
+    const prev = previousSession(sets, name, today);
+    const sub = doneToday ? `${doneToday}セット記録済み` : prev ? `前回 ${formatDate(prev.date)}` : '';
+    return el('li', {},
+      el('button', { type: 'button', class: `ex-item${doneToday ? ' done' : ''}`, onclick: () => openExercise(name) },
+        el('span', { class: 'ex-name' }, name),
+        sub ? el('span', { class: 'ex-sub' }, sub) : null,
+        el('span', { class: 'chev', 'aria-hidden': 'true' }, '›')));
+  }));
+}
 
-form.addEventListener('submit', (e) => {
+function renderToday() {
+  const day = groupByDate(sets.filter((s) => s.date === fDate.value))[0];
+  $('#today-box').hidden = !day;
+  if (!day) return;
+  $('#today-title').textContent = `${formatDate(fDate.value)}の記録`;
+  $('#today-list').replaceChildren(...day.exercises.map((ex) =>
+    el('button', { type: 'button', class: 'chip', onclick: () => openExercise(ex.name) }, `${ex.name} ${ex.sets.length}セット`)));
+}
+
+function renderAddForm() {
+  const sel = $('#add-part');
+  if (sel.options.length === 0) sel.replaceChildren(...PARTS.map((p) => el('option', { value: p.key }, p.label)));
+  if (!$('#add-exercise').open) sel.value = currentPart;
+}
+
+$('#add-exercise').addEventListener('toggle', renderAddForm);
+$('#add-form').addEventListener('submit', (e) => {
   e.preventDefault();
-  const res = validateSet({ date: fDate.value, exercise: fExercise.value, weight: fWeight.value, reps: fReps.value, note: fNote.value });
+  const res = validateCustomExercise($('#add-name').value, $('#add-part').value, custom);
   if (!res.ok) { toast(res.error, true); return; }
-  if (saveSets([...sets, res.value])) {
-    fNote.value = '';
-    toast('記録しました');
-    render();
-    if (timerAuto) timerStart(timer.durationSec);
-  }
+  if (!saveCustom([...custom, res.value])) return;
+  $('#add-name').value = '';
+  $('#add-exercise').open = false;
+  currentPart = res.value.part;
+  saveJson(KEY_PART, currentPart);
+  toast(`「${res.value.name}」を追加しました`);
+  openExercise(res.value.name);
 });
 
-function renderChips() {
-  const box = $('#chips');
-  box.replaceChildren(...exerciseNames(sets).slice(0, 8).map((name) =>
-    el('button', { type: 'button', class: 'chip', onclick: () => { fExercise.value = name; prefillFromHistory(); renderPrevious(); } }, name)));
-  $('#exercise-list').replaceChildren(...exerciseNames(sets).map((name) => el('option', { value: name })));
+function renderPick() {
+  renderToday();
+  renderPartTabs();
+  renderExerciseList();
+  renderAddForm();
 }
+
+// ---------- 記録タブ：種目ごとの記録 ----------
+function doneSets() {
+  return groupByDate(sets.filter((s) => s.exercise === currentExercise && s.date === fDate.value))[0]?.exercises[0].sets ?? [];
+}
+
+function resetRows() {
+  if (!currentExercise) return;
+  rows = planRows(previousSession(sets, currentExercise, fDate.value)?.sets, doneSets()).map((r) => ({ ...r, showNote: false }));
+}
+
+function openExercise(name) {
+  currentExercise = name;
+  resetRows();
+  $('#pick-screen').hidden = true;
+  $('#exercise-screen').hidden = false;
+  render();
+  window.scrollTo(0, 0);
+}
+
+function closeExercise() {
+  currentExercise = null;
+  rows = [];
+  $('#exercise-screen').hidden = true;
+  $('#pick-screen').hidden = false;
+  render();
+  window.scrollTo(0, 0);
+}
+$('#back-btn').addEventListener('click', closeExercise);
 
 function renderPrevious() {
   const box = $('#previous');
-  const name = fExercise.value.trim();
-  const prev = name ? previousSession(sets, name, fDate.value) : null;
+  const prev = previousSession(sets, currentExercise, fDate.value);
   if (!prev) { box.hidden = true; return; }
   box.hidden = false;
   box.replaceChildren(
     el('div', { class: 'prev-title' }, `前回 ${formatDate(prev.date)}`),
-    el('div', { class: 'prev-sets' }, prev.sets.map((s) => `${formatWeight(s.weight)}×${s.reps}`).join(' / ')),
+    el('div', { class: 'prev-sets' }, prev.sets.map((s) => `${formatWeight(s.weight)}×${s.reps}`).join('  /  ')),
   );
 }
 
-function renderDay() {
-  const day = groupByDate(sets.filter((s) => s.date === fDate.value))[0];
-  $('#day-title').textContent = `${formatDate(fDate.value)}の記録`;
-  const box = $('#day-list');
-  if (!day) { box.replaceChildren(el('p', { class: 'empty' }, 'まだ記録がありません')); return; }
-  box.replaceChildren(...day.exercises.map((ex) =>
-    el('div', { class: 'card' }, el('h3', {}, ex.name), el('ol', { class: 'sets' }, ex.sets.map((s, i) => setLine(s, i, deleteSet))))));
+function recordRow(i) {
+  const r = rows[i];
+  const res = validateSet({ date: fDate.value, exercise: currentExercise, weight: r.weight, reps: r.reps, note: r.note });
+  if (!res.ok) { toast(res.error, true); return; }
+  if (!saveSets([...sets, res.value])) return;
+  rows.splice(i, 1);
+  toast(`${formatWeight(res.value.weight)}kg × ${res.value.reps}回 を記録しました`);
+  if (timerAuto) timerStart(timer.durationSec);
+  render();
+}
+
+function numberInput(value, mode, label, onInput) {
+  return el('input', { type: 'text', inputmode: mode, value, 'aria-label': label, placeholder: '0', class: 'num-in', oninput: (e) => onInput(e.target.value), onfocus: (e) => e.target.select() });
+}
+
+function renderSetRows() {
+  const done = doneSets();
+  const items = done.map((s, i) => el('li', { class: 'set-row done' },
+    el('div', { class: 'set-grid' },
+      el('span', { class: 'set-no' }, String(i + 1)),
+      el('span', { class: 'val' }, formatWeight(s.weight), el('small', {}, 'kg')),
+      el('span', { class: 'val' }, String(s.reps), el('small', {}, '回')),
+      el('button', { type: 'button', class: 'del-btn', 'aria-label': `${i + 1}セット目を削除`, onclick: () => deleteSet(s) }, '×')),
+    s.note ? el('div', { class: 'row-note' }, s.note) : null));
+
+  rows.forEach((r, i) => {
+    const no = done.length + i + 1;
+    items.push(el('li', { class: 'set-row' },
+      el('div', { class: 'set-grid' },
+        el('span', { class: 'set-no' }, String(no)),
+        el('span', { class: 'in-wrap' }, numberInput(r.weight, 'decimal', `${no}セット目の重量`, (v) => { r.weight = v; }), el('small', {}, 'kg')),
+        el('span', { class: 'in-wrap' }, numberInput(r.reps, 'numeric', `${no}セット目の回数`, (v) => { r.reps = v; }), el('small', {}, '回')),
+        el('button', { type: 'button', class: 'check-btn', 'aria-label': `${no}セット目を記録`, onclick: () => recordRow(i) }, '✓')),
+      el('div', { class: 'row-tools' },
+        r.showNote
+          ? el('input', { type: 'text', class: 'note-in', maxlength: '100', placeholder: 'メモ（任意）', value: r.note, 'aria-label': `${no}セット目のメモ`, oninput: (e) => { r.note = e.target.value; } })
+          : el('button', { type: 'button', class: 'link-btn', onclick: () => { r.showNote = true; renderSetRows(); } }, '＋メモ'),
+        el('button', { type: 'button', class: 'link-btn', onclick: () => { rows.splice(i, 1); renderSetRows(); } }, 'この行を消す'))));
+  });
+  $('#set-rows').replaceChildren(...items);
+}
+
+$('#add-row').addEventListener('click', () => {
+  const last = rows[rows.length - 1] ?? doneSets().slice(-1)[0];
+  rows.push({ weight: last ? String(last.weight) : '', reps: last ? String(last.reps) : '', note: '', showNote: false });
+  renderSetRows();
+});
+
+function renderExercise() {
+  $('#ex-title').textContent = currentExercise;
+  renderPrevious();
+  renderSetRows();
 }
 
 function renderReminder() {
   // 一度もバックアップしていない場合は、いちばん古い記録の登録日から数える
-  const since = getLastBackup() ?? sets.reduce((min, s) => (s.createdAt < min ? s.createdAt : min), new Date().toISOString());
+  const since = loadJson(KEY_BACKUP) ?? sets.reduce((min, s) => (s.createdAt < min ? s.createdAt : min), new Date().toISOString());
   const days = (Date.now() - Date.parse(since)) / 86400000;
   $('#reminder').hidden = !(sets.length > 0 && days >= BACKUP_REMIND_DAYS);
 }
 
 // ---------- 休憩タイマー ----------
-const KEY_TIMER = 'kintore.v1.timer';
-const KEY_TIMER_AUTO = 'kintore.v1.timerAuto';
-
-function loadJson(key) {
-  try { return JSON.parse(localStorage.getItem(key)); } catch { return null; }
-}
-function saveJson(key, value) {
-  try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* タイマーは保存できなくても動作は続ける */ }
-}
-
 let timer = normalizeTimer(loadJson(KEY_TIMER));
 let timerAuto = loadJson(KEY_TIMER_AUTO) ?? true;
 let timerTick = null;
@@ -239,20 +321,22 @@ function timerStart(sec) {
 function renderTimer() {
   const now = Date.now();
   const finished = isFinished(timer, now);
+  const running = timer.status === 'running' && !finished;
   const box = $('#timer');
-  box.classList.toggle('running', timer.status === 'running' && !finished);
+  box.classList.toggle('running', running);
   box.classList.toggle('finished', finished);
   $('#timer-clock').textContent = formatClock(timer.status === 'idle' ? timer.durationSec * 1000 : remainingMs(timer, now));
-  $('#timer-status').textContent = finished ? '休憩終了！' : timer.status === 'paused' ? '一時停止中' : timer.status === 'running' ? '休憩中…' : '';
-  $('#timer-toggle').textContent = timer.status === 'running' && !finished ? '一時停止' : timer.status === 'paused' ? '再開' : 'スタート';
+  $('#timer-status').textContent = finished ? '休憩終了！' : timer.status === 'paused' ? '一時停止中' : running ? '休憩中' : '休憩タイマー';
+  const toggle = $('#timer-toggle');
+  toggle.textContent = running ? '❚❚' : '▶';
+  toggle.setAttribute('aria-label', running ? '一時停止' : timer.status === 'paused' ? '再開' : 'スタート');
   document.querySelectorAll('.preset').forEach((b) => b.setAttribute('aria-pressed', String(Number(b.dataset.sec) === timer.durationSec)));
   $('#timer-auto').checked = timerAuto;
 
   if (finished && !finishNotified) { finishNotified = true; beep(); }
 
-  const shouldTick = timer.status === 'running' && !finished;
-  if (shouldTick && !timerTick) timerTick = setInterval(renderTimer, 250);
-  if (!shouldTick && timerTick) { clearInterval(timerTick); timerTick = null; }
+  if (running && !timerTick) timerTick = setInterval(renderTimer, 250);
+  if (!running && timerTick) { clearInterval(timerTick); timerTick = null; }
 }
 
 document.querySelectorAll('.preset').forEach((b) => b.addEventListener('click', () => timerStart(Number(b.dataset.sec))));
@@ -265,8 +349,8 @@ $('#timer-toggle').addEventListener('click', () => {
 });
 $('#timer-reset').addEventListener('click', () => setTimer(resetTimer(timer)));
 $('#timer-auto').addEventListener('change', (e) => { timerAuto = e.target.checked; saveJson(KEY_TIMER_AUTO, timerAuto); });
-form.addEventListener('submit', unlockAudio, { capture: true });
-document.addEventListener('visibilitychange', () => { if (document.visibilityState === 'visible') renderTimer(); });
+// ✓ボタンなど、どこかをタップした時点で音を出せるようにしておく
+document.addEventListener('pointerdown', unlockAudio, { capture: true });
 
 // ---------- 履歴タブ ----------
 function renderHistory() {
@@ -276,7 +360,9 @@ function renderHistory() {
   box.replaceChildren(...days.map((d) =>
     el('details', { class: 'card' },
       el('summary', {}, el('span', { class: 'h-date' }, formatDate(d.date)), el('span', { class: 'h-sum' }, d.exercises.map((x) => x.name).join('・'))),
-      d.exercises.map((ex) => el('div', { class: 'h-ex' }, el('h3', {}, ex.name), el('ol', { class: 'sets' }, ex.sets.map((s, i) => setLine(s, i, deleteSet))))),
+      d.exercises.map((ex) => el('div', { class: 'h-ex' },
+        el('h3', {}, ex.name, el('span', { class: 'h-part' }, partLabel(partOf(ex.name, custom)))),
+        el('ol', { class: 'sets' }, ex.sets.map((s, i) => setLine(s, i, deleteSet))))),
     )));
 }
 
@@ -284,7 +370,7 @@ function renderHistory() {
 async function exportCsv() {
   if (sets.length === 0) { toast('記録がまだありません', true); return; }
   const name = `kintore-${toDateKey().replace(/-/g, '')}.csv`;
-  const file = new File([toCsv(sets)], name, { type: 'text/csv' });
+  const file = new File([toCsv(sets, custom)], name, { type: 'text/csv' });
   try {
     if (navigator.canShare?.({ files: [file] })) {
       await navigator.share({ files: [file] });
@@ -293,7 +379,7 @@ async function exportCsv() {
       el('a', { href: url, download: name }).click();
       setTimeout(() => URL.revokeObjectURL(url), 1000);
     }
-    setLastBackup();
+    saveJson(KEY_BACKUP, new Date().toISOString());
     toast('バックアップしました');
     render();
   } catch (err) {
@@ -304,7 +390,7 @@ async function exportCsv() {
 async function importCsv(file) {
   let text;
   try { text = await file.text(); } catch { toast('ファイルを読めませんでした', true); return; }
-  const { sets: incoming, errors } = fromCsv(text);
+  const { sets: incoming, parts, errors } = fromCsv(text);
   if (incoming.length === 0) { alert(errors.slice(0, 5).join('\n') || '読み込める記録がありませんでした'); return; }
   const preview = mergeSets(sets, incoming);
   let msg = `新しい記録 ${preview.added}件を追加します。`;
@@ -312,7 +398,18 @@ async function importCsv(file) {
   if (errors.length) msg += `\n\n読み込めない行が${errors.length}件あります：\n${errors.slice(0, 5).join('\n')}`;
   if (preview.added === 0) { alert(msg); return; }
   if (!confirm(msg)) return;
-  if (saveSets(preview.sets)) { toast(`${preview.added}件を追加しました`); render(); }
+  // バックアップにある部位情報から、未登録の種目を追加種目として登録する
+  const newCustom = [...custom];
+  for (const [name, part] of parts) {
+    if (part !== 'other' && partOf(name, newCustom) === 'other' && validateCustomExercise(name, part, newCustom).ok) {
+      newCustom.push({ name, part, createdAt: new Date().toISOString() });
+    }
+  }
+  if (saveSets(preview.sets) && (newCustom.length === custom.length || saveCustom(newCustom))) {
+    toast(`${preview.added}件を追加しました`);
+    resetRows();
+    render();
+  }
 }
 
 $('#export-btn').onclick = exportCsv;
@@ -324,7 +421,7 @@ $('#import-input').addEventListener('change', (e) => {
 });
 
 function renderBackup() {
-  const last = getLastBackup();
+  const last = loadJson(KEY_BACKUP);
   $('#backup-info').textContent = `記録 ${sets.length}件 ／ 最終バックアップ：${last ? new Date(last).toLocaleString('ja-JP') : 'まだありません'}`;
 }
 
@@ -338,10 +435,8 @@ document.querySelectorAll('.tab').forEach((btn) => {
 });
 
 function render() {
-  renderChips();
-  renderPrevious();
-  renderDay();
   renderReminder();
+  if (currentExercise) renderExercise(); else renderPick();
   renderHistory();
   renderBackup();
 }

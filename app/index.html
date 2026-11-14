@@ -27,68 +27,62 @@
         <button type="button" id="reminder-btn" class="btn small">今すぐ</button>
       </div>
 
-      <form id="record-form" class="card form" autocomplete="off">
-        <label class="row">
-          <span class="lbl">日付</span>
-          <input type="date" id="f-date" required>
-        </label>
+      <div class="record-bar">
+        <label class="date-pick"><span class="lbl">日付</span><input type="date" id="f-date" required></label>
+      </div>
 
-        <label class="field">
-          <span class="lbl">種目</span>
-          <input type="text" id="f-exercise" list="exercise-list" placeholder="例：ベンチプレス" maxlength="100" enterkeyhint="next">
-          <datalist id="exercise-list"></datalist>
-        </label>
-        <div id="chips" class="chips"></div>
+      <section id="timer" class="timer" aria-label="休憩タイマー">
+        <div class="timer-main">
+          <div id="timer-clock" class="timer-clock" role="timer" aria-live="off">1:30</div>
+          <div id="timer-status" class="timer-status" aria-live="polite">休憩タイマー</div>
+        </div>
+        <div class="presets">
+          <button type="button" class="preset" data-sec="60">60</button>
+          <button type="button" class="preset" data-sec="90">90</button>
+          <button type="button" class="preset" data-sec="120">120</button>
+        </div>
+        <button type="button" id="timer-toggle" class="timer-btn" aria-label="スタート">▶</button>
+        <button type="button" id="timer-reset" class="timer-btn" aria-label="リセット">↺</button>
+      </section>
+
+      <!-- 種目を選ぶ -->
+      <div id="pick-screen">
+        <div id="today-box" class="card today" hidden>
+          <div class="lbl" id="today-title"></div>
+          <div id="today-list" class="today-list"></div>
+        </div>
+
+        <div id="part-tabs" class="part-tabs" role="tablist" aria-label="部位"></div>
+        <ul id="exercise-list" class="ex-list"></ul>
+
+        <details id="add-exercise" class="card add-ex">
+          <summary>＋ 種目を追加</summary>
+          <form id="add-form" class="add-form" autocomplete="off">
+            <input type="text" id="add-name" placeholder="種目名（例：ペックフライ）" maxlength="100">
+            <select id="add-part" aria-label="部位"></select>
+            <button type="submit" class="btn primary">追加する</button>
+          </form>
+        </details>
+      </div>
+
+      <!-- 種目ごとの記録 -->
+      <div id="exercise-screen" hidden>
+        <div class="ex-head">
+          <button type="button" id="back-btn" class="back">‹ 種目一覧</button>
+          <h2 id="ex-title"></h2>
+        </div>
 
         <div id="previous" class="previous" hidden></div>
 
-        <div class="nums">
-          <div class="num">
-            <span class="lbl">重量（kg）</span>
-            <div class="stepper">
-              <button type="button" id="w-minus" aria-label="重量を減らす">−</button>
-              <input type="text" id="f-weight" inputmode="decimal" placeholder="0">
-              <button type="button" id="w-plus" aria-label="重量を増やす">＋</button>
-            </div>
+        <div class="card set-card">
+          <div class="set-grid set-grid-head" aria-hidden="true">
+            <span>セット</span><span>重量（kg）</span><span>回数</span><span></span>
           </div>
-          <div class="num">
-            <span class="lbl">回数</span>
-            <div class="stepper">
-              <button type="button" id="r-minus" aria-label="回数を減らす">−</button>
-              <input type="text" id="f-reps" inputmode="numeric" placeholder="0">
-              <button type="button" id="r-plus" aria-label="回数を増やす">＋</button>
-            </div>
-          </div>
+          <ol id="set-rows" class="set-rows"></ol>
+          <button type="button" id="add-row" class="btn ghost">＋ セットを追加</button>
         </div>
-
-        <label class="field">
-          <span class="lbl">メモ（任意）</span>
-          <input type="text" id="f-note" maxlength="100" placeholder="例：フォーム意識">
-        </label>
-
-        <button type="submit" class="btn primary">記録する</button>
-      </form>
-
-      <section id="timer" class="card timer" aria-label="休憩タイマー">
-        <div class="timer-head">
-          <span class="lbl">休憩タイマー</span>
-          <label class="auto"><input type="checkbox" id="timer-auto"> 記録したら自動スタート</label>
-        </div>
-        <div id="timer-clock" class="timer-clock" role="timer" aria-live="off">1:30</div>
-        <div id="timer-status" class="timer-status" aria-live="polite"></div>
-        <div class="presets">
-          <button type="button" class="preset" data-sec="60">60秒</button>
-          <button type="button" class="preset" data-sec="90">90秒</button>
-          <button type="button" class="preset" data-sec="120">120秒</button>
-        </div>
-        <div class="timer-ctrl">
-          <button type="button" id="timer-toggle" class="btn">スタート</button>
-          <button type="button" id="timer-reset" class="btn">リセット</button>
-        </div>
-      </section>
-
-      <h2 id="day-title" class="section-title"></h2>
-      <div id="day-list"></div>
+        <label class="auto"><input type="checkbox" id="timer-auto"> ✓を押したら休憩タイマーを自動スタート</label>
+      </div>
     </section>
 
     <!-- 履歴 -->

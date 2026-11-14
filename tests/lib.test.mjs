@@ -161,3 +161,57 @@ test('formatClock: 切り上げ表示', () => {
   assert.equal(formatClock(0), '0:00');
   assert.equal(formatClock(600000), '10:00');
 });
+
+import { partOf, validateCustomExercise, exercisesForPart, planRows, PRESET_EXERCISES } from '../app/lib.js';
+
+test('partOf: 追加種目 → 用意済み → その他', () => {
+  assert.equal(partOf('ベンチプレス'), 'chest');
+  assert.equal(partOf('ペックフライ', [{ name: 'ペックフライ', part: 'chest' }]), 'chest');
+  assert.equal(partOf('謎の種目'), 'other');
+});
+
+test('validateCustomExercise: 空・重複・不正な部位を拒否', () => {
+  assert.equal(validateCustomExercise('  ', 'chest').ok, false);
+  assert.equal(validateCustomExercise('ベンチプレス', 'chest').ok, false, '用意済みと重複');
+  assert.equal(validateCustomExercise('A', 'chest', [{ name: 'A', part: 'back' }]).ok, false, '追加済みと重複');
+  assert.equal(validateCustomExercise('A', 'foo').ok, false);
+  const r = validateCustomExercise(' ペックフライ ', 'chest');
+  assert.ok(r.ok);
+  assert.equal(r.value.name, 'ペックフライ');
+});
+
+test('exercisesForPart: 最近使った種目が先頭、追加種目と記録だけの種目も含む', () => {
+  const custom = [{ name: 'ペックフライ', part: 'chest' }];
+  const s = [
+    mk({ date: '2026-11-01', exercise: 'ダンベルプレス' }),
+    mk({ date: '2026-11-10', exercise: 'ペックフライ' }),
+    mk({ date: '2026-11-05', exercise: '旧名の種目' }),
+  ];
+  const chest = exercisesForPart('chest', custom, s);
+  assert.deepEqual(chest.slice(0, 2), ['ペックフライ', 'ダンベルプレス']);
+  assert.equal(chest.length, PRESET_EXERCISES.chest.length + 1);
+  assert.deepEqual(exercisesForPart('other', custom, s), ['旧名の種目']);
+});
+
+test('planRows: 前回のセット数・値で行を用意し、記録済みの分は除く', () => {
+  const prev = [mk({ weight: '45', reps: '5' }), mk({ weight: '52', reps: '8' }), mk({ weight: '52', reps: '8' })];
+  assert.deepEqual(planRows(prev, []).map((r) => `${r.weight}x${r.reps}`), ['45x5', '52x8', '52x8']);
+  assert.deepEqual(planRows(prev, [prev[0]]).map((r) => `${r.weight}x${r.reps}`), ['52x8', '52x8']);
+  // 前回より多くやった場合も1行は用意し、直前の記録の値を入れる
+  const done = [...prev, mk({ weight: '55', reps: '6' })];
+  assert.deepEqual(planRows(prev, done).map((r) => `${r.weight}x${r.reps}`), ['55x6']);
+  // 前回なし・今日もなし → 空の1行
+  assert.deepEqual(planRows(undefined, []), [{ weight: '', reps: '', note: '' }]);
+});
+
+test('CSV: 部位を書き出し、読み込み時に返す。部位列のない旧形式も読める', () => {
+  const custom = [{ name: 'ペックフライ', part: 'chest' }];
+  const csv = toCsv([mk({ exercise: 'ペックフライ' }), mk({ exercise: 'スクワット' })], custom);
+  assert.match(csv, /,chest,ペックフライ,/);
+  assert.match(csv, /,legs,スクワット,/);
+  const r = fromCsv(csv);
+  assert.equal(r.parts.get('ペックフライ'), 'chest');
+  const old = fromCsv('date,exercise,weight,reps,note,id,createdAt\n2026-11-14,スクワット,100,5,,x1,2026-11-14T00:00:00Z\n');
+  assert.equal(old.sets.length, 1);
+  assert.equal(old.parts.size, 0);
+});

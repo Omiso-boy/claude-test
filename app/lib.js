@@ -1,6 +1,6 @@
 // 筋トレ記録：画面に依存しない純粋なロジック（テスト対象）
 
-export const CSV_HEADER = ['date', 'exercise', 'weight', 'reps', 'note', 'id', 'createdAt'];
+export const CSV_HEADER = ['date', 'part', 'exercise', 'weight', 'reps', 'note', 'id', 'createdAt'];
 
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
 const MAX_WEIGHT = 1000; // kg。入力ミス防止の上限
@@ -119,11 +119,11 @@ function csvCell(v) {
   return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 
-export function toCsv(sets) {
+export function toCsv(sets, custom = []) {
   const lines = [CSV_HEADER.join(',')];
   for (const s of sortSets(sets)) {
     lines.push(
-      [s.date, guardFormula(s.exercise), formatWeight(s.weight), s.reps, guardFormula(s.note ?? ''), s.id, s.createdAt]
+      [s.date, partOf(s.exercise, custom), guardFormula(s.exercise), formatWeight(s.weight), s.reps, guardFormula(s.note ?? ''), s.id, s.createdAt]
         .map(csvCell)
         .join(','),
     );
@@ -158,17 +158,19 @@ export function parseCsvRows(text) {
 
 /**
  * バックアップCSVを読み込む。不正な行は捨てずにエラーとして返す。
- * @returns {{sets: object[], errors: string[]}}
+ * parts: 種目名 → 部位（part列がある場合。旧形式のCSVには無い）
+ * @returns {{sets: object[], parts: Map<string,string>, errors: string[]}}
  */
 export function fromCsv(text) {
   const rows = parseCsvRows(text);
-  if (rows.length === 0) return { sets: [], errors: ['ファイルが空です'] };
+  if (rows.length === 0) return { sets: [], parts: new Map(), errors: ['ファイルが空です'] };
   const header = rows[0].map((h) => h.trim());
   const idx = Object.fromEntries(CSV_HEADER.map((h) => [h, header.indexOf(h)]));
   const missing = ['date', 'exercise', 'weight', 'reps'].filter((h) => idx[h] < 0);
-  if (missing.length) return { sets: [], errors: [`この記録アプリのバックアップではないようです（列がありません：${missing.join(', ')}）`] };
+  if (missing.length) return { sets: [], parts: new Map(), errors: [`この記録アプリのバックアップではないようです（列がありません：${missing.join(', ')}）`] };
 
   const sets = [];
+  const parts = new Map();
   const errors = [];
   rows.slice(1).forEach((r, i) => {
     const get = (h) => (idx[h] >= 0 ? r[idx[h]] ?? '' : '');
@@ -181,10 +183,13 @@ export function fromCsv(text) {
       id: get('id') || undefined,
       createdAt: get('createdAt') || undefined,
     });
-    if (res.ok) sets.push(res.value);
-    else errors.push(`${i + 2}行目：${res.error}`);
+    if (res.ok) {
+      sets.push(res.value);
+      const part = get('part').trim();
+      if (isPart(part)) parts.set(res.value.exercise, part);
+    } else errors.push(`${i + 2}行目：${res.error}`);
   });
-  return { sets, errors };
+  return { sets, parts, errors };
 }
 
 /** 既存の記録に取り込む。同じIDは重複として追加しない */
@@ -249,4 +254,78 @@ export function normalizeTimer(raw) {
 export function formatClock(ms) {
   const total = Math.ceil(ms / 1000);
   return `${Math.floor(total / 60)}:${String(total % 60).padStart(2, '0')}`;
+}
+
+// ---------- 部位と種目 ----------
+export const PARTS = [
+  { key: 'chest', label: '胸' },
+  { key: 'back', label: '背中' },
+  { key: 'shoulders', label: '肩' },
+  { key: 'arms', label: '腕' },
+  { key: 'legs', label: '脚' },
+  { key: 'abs', label: '腹' },
+  { key: 'neck', label: '首' },
+  { key: 'other', label: 'その他' },
+];
+const PART_KEYS = new Set(PARTS.map((p) => p.key));
+
+export const PRESET_EXERCISES = {
+  chest: ['ベンチプレス', 'インクラインベンチプレス', 'ダンベルプレス', 'ダンベルフライ', 'バタフライ', 'プッシュアップ', 'ディップス', 'ケーブルクロスオーバー'],
+  back: ['デッドリフト', 'ラットプルダウン', '懸垂', 'ベントオーバーロウ', 'シーテッドロー', 'ワンハンドロウ', 'バックエクステンション'],
+  shoulders: ['ショルダープレス', 'ダンベルショルダープレス', 'サイドレイズ', 'フロントレイズ', 'リアレイズ', 'アップライトロウ', 'シュラッグ'],
+  arms: ['バーベルカール', 'ダンベルカール', 'ハンマーカール', 'トライセプスエクステンション', 'トライセプスプッシュダウン', 'ナローベンチプレス'],
+  legs: ['スクワット', 'レッグプレス', 'レッグエクステンション', 'レッグカール', 'ランジ', 'ブルガリアンスクワット', 'カーフレイズ'],
+  abs: ['クランチ', 'レッグレイズ', 'アブローラー', 'シットアップ'],
+  neck: ['ネックフレクション', 'ネックエクステンション', 'ネックサイドフレクション'],
+  other: [],
+};
+
+export function isPart(key) {
+  return PART_KEYS.has(key);
+}
+
+/** 種目名 → 部位。追加種目 → 用意済み種目 → その他 の順に探す */
+export function partOf(name, custom = []) {
+  const c = custom.find((x) => x.name === name);
+  if (c) return c.part;
+  for (const [part, names] of Object.entries(PRESET_EXERCISES)) if (names.includes(name)) return part;
+  return 'other';
+}
+
+/** 追加種目の検証。既にある名前は追加しない */
+export function validateCustomExercise(nameInput, part, custom = []) {
+  const name = String(nameInput ?? '').trim();
+  if (!name) return { ok: false, error: '種目名を入力してください' };
+  if (name.length > MAX_TEXT) return { ok: false, error: `種目名は${MAX_TEXT}文字以内にしてください` };
+  if (!isPart(part)) return { ok: false, error: '部位を選んでください' };
+  const exists = custom.some((x) => x.name === name) || Object.values(PRESET_EXERCISES).some((l) => l.includes(name));
+  if (exists) return { ok: false, error: 'その種目はすでにあります' };
+  return { ok: true, value: { name, part, createdAt: new Date().toISOString() } };
+}
+
+/**
+ * 部位の種目一覧。記録がある種目を最近使った順に先頭へ、残りは用意済み→追加の順。
+ * 記録にだけ存在する種目（部位不明）は「その他」に入る。
+ */
+export function exercisesForPart(part, custom, sets) {
+  const names = [...(PRESET_EXERCISES[part] ?? []), ...custom.filter((c) => c.part === part).map((c) => c.name)];
+  for (const s of sets) if (!names.includes(s.exercise) && partOf(s.exercise, custom) === part) names.push(s.exercise);
+  const recent = exerciseNames(sets);
+  const used = recent.filter((n) => names.includes(n));
+  return [...used, ...names.filter((n) => !used.includes(n))];
+}
+
+/**
+ * 種目画面に並べる未記録の行。前回のセット数ぶん、前回の値を入れて用意する。
+ * done: 今日（選択日）に記録済みのセット、prev: 前回の記録
+ */
+export function planRows(prevSets, done) {
+  const prev = prevSets ?? [];
+  const count = Math.max(1, prev.length - done.length);
+  const rows = [];
+  for (let i = 0; i < count; i++) {
+    const src = prev[done.length + i] ?? rows[rows.length - 1] ?? done[done.length - 1] ?? prev[prev.length - 1];
+    rows.push({ weight: src ? formatWeight(src.weight) : '', reps: src ? String(src.reps) : '', note: '' });
+  }
+  return rows;
 }
