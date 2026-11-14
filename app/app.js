@@ -6,7 +6,7 @@ import {
   PARTS, partOf, validateCustomExercise, exercisesForPart, planRows,
   equipmentOf, daySummary, exerciseStats,
 } from './lib.js';
-import { PART_ICONS, EQUIPMENT_ICONS, UI_ICONS } from './icons.js';
+import { PART_ICONS, EQUIPMENT_ICONS, UI_ICONS, muscleFigures } from './icons.js';
 
 const KEY_SETS = 'kintore.v1.sets';
 const KEY_CUSTOM = 'kintore.v1.customExercises';
@@ -155,10 +155,8 @@ function renderDate() {
 
 function renderSummary() {
   const sum = daySummary(sets, fDate.value, custom);
-  const shownPart = sum.parts[0] ?? currentPart;
-  $('#summary-body').innerHTML = PART_ICONS[shownPart];
-  $('#summary-badge').textContent = sum.parts.length ? `${sum.parts.map(partLabel).join('・')}の日` : 'まだ記録がありません';
-  $('#summary-badge').classList.toggle('empty-badge', !sum.parts.length);
+  // 筋肉の絵：その日に記録した部位の筋肉をオレンジにする
+  $('#summary-body').innerHTML = muscleFigures(sum.parts);
   $('#stat-sets').textContent = String(sum.setCount);
   $('#stat-ex').textContent = String(sum.exerciseCount);
   $('#stat-time').textContent = sum.minutes == null ? '−' : sum.minutes >= 60 ? `${Math.floor(sum.minutes / 60)}時間${sum.minutes % 60}分` : `${sum.minutes}分`;

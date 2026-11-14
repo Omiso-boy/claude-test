@@ -41,3 +41,41 @@ export const UI_ICONS = {
   chevronRight: svg('<path d="M18 10l14 14-14 14"/>'),
   calendar: svg('<rect x="7" y="10" width="34" height="31" rx="3"/><path d="M7 19h34M16 6v8M32 6v8"/>'),
 };
+
+// ---------- 筋肉の全身図（前・後ろ） ----------
+// 左半分だけ描き、左右反転して右半分を作る。part が記録した部位なら .on（アクセント色）になる。
+// [部位, SVGの図形] の配列。座標は viewBox 0 0 100 150、体の中心は x=50。
+const FRONT_HALF = [
+  ['neck', '<path d="M38 27L45 22v6z"/>'],
+  ['shoulders', '<path d="M37 29c-7 0-11 5-11 13h7c0-5 2-9 6-11z"/>'],
+  ['chest', '<path d="M49 31H40c-5 2-7 8-5 14 5 3 10 3 14 1z"/>'],
+  ['arms', '<path d="M26 44c-2 6-2 12 0 17h6c1-5 1-11 0-17z"/>'],
+  ['arms', '<path d="M26 63c-3 6-4 13-3 19h5c2-6 3-13 4-19z"/>'],
+  ['abs', '<rect x="43.5" y="48" width="5.5" height="6" rx="1.5"/><rect x="43.5" y="55.5" width="5.5" height="6" rx="1.5"/><rect x="43.5" y="63" width="5.5" height="7" rx="1.5"/>'],
+  ['abs', '<path d="M42 48h-5c-1 8 0 16 3 22h2z"/>'],
+  ['legs', '<path d="M48.5 76H38c-3 12-3 24 0 34h8c2-10 3-22 2.5-34z"/>'],
+  ['legs', '<path d="M39 115c-3 8-2 18 0 27h5c2-8 2-18 1-27z"/>'],
+];
+const BACK_HALF = [
+  ['back', '<path d="M49.5 22L38 29l11.5 15z"/>'],
+  ['shoulders', '<path d="M37 29c-7 0-11 5-11 13h7c0-5 2-9 6-11z"/>'],
+  ['back', '<path d="M48.5 46L37 33c-4 6-3 17 3 27l8.5 2z"/>'],
+  ['arms', '<path d="M26 44c-2 6-2 12 0 17h6c1-5 1-11 0-17z"/>'],
+  ['arms', '<path d="M26 63c-3 6-4 13-3 19h5c2-6 3-13 4-19z"/>'],
+  ['back', '<path d="M49 63h-7v9h7z"/>'],
+  ['legs', '<path d="M49 74H39c-3 5-2 10 1 14h9z"/>'],
+  ['legs', '<path d="M48.5 90H38c-2 8-1 14 1 20h7c2-7 2.5-13 2.5-20z"/>'],
+  ['legs', '<path d="M39 115c-3 8-2 18 0 27h5c2-8 2-18 1-27z"/>'],
+];
+const HEAD = '<circle class="head" cx="50" cy="11" r="8"/><path class="head" d="M45 19h10v6H45z"/>';
+
+function figure(half, active, label) {
+  const shapes = half.map(([part, d]) => `<g class="m${active.has(part) ? ' on' : ''}">${d}</g>`).join('');
+  return `<svg viewBox="0 0 100 150" role="img" aria-label="${label}">${HEAD}${shapes}<g transform="translate(100 0) scale(-1 1)">${shapes}</g></svg>`;
+}
+
+/** 前・後ろの全身図。activeParts に含まれる部位の筋肉を強調する */
+export function muscleFigures(activeParts = []) {
+  const active = new Set(activeParts);
+  return `<span class="fig">${figure(FRONT_HALF, active, '全身の筋肉（前）')}</span><span class="fig">${figure(BACK_HALF, active, '全身の筋肉（後ろ）')}</span>`;
+}
