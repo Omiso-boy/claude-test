@@ -248,3 +248,24 @@ test('exerciseStats: 当日があれば当日、なければ前回', () => {
   assert.equal(exerciseStats(s, 'ベンチプレス', '2026-11-14').sets, 1);
   assert.equal(exerciseStats(s, 'スクワット', '2026-11-14'), null);
 });
+
+import { normalizePlans, togglePlanPart, dayParts } from '../app/lib.js';
+
+test('normalizePlans: 不正な日付・部位・形式を捨てる', () => {
+  assert.deepEqual(normalizePlans(null), {});
+  assert.deepEqual(normalizePlans([]), {});
+  assert.deepEqual(normalizePlans({ '2026-11-14': ['chest', 'foo', 'chest'], 'x': ['back'], '2026-11-15': 'chest', '2026-11-16': [] }), { '2026-11-14': ['chest'] });
+});
+
+test('togglePlanPart: 追加・解除し、部位の並び順にそろえる', () => {
+  assert.deepEqual(togglePlanPart([], 'arms'), ['arms']);
+  assert.deepEqual(togglePlanPart(['arms'], 'chest'), ['chest', 'arms']);
+  assert.deepEqual(togglePlanPart(['chest', 'arms'], 'chest'), ['arms']);
+  assert.deepEqual(togglePlanPart(undefined, 'foo'), []);
+});
+
+test('dayParts: 決めてあれば優先、なければ記録から', () => {
+  const plans = { '2026-11-14': ['back'] };
+  assert.deepEqual(dayParts(plans, '2026-11-14', ['chest']), { parts: ['back'], planned: true });
+  assert.deepEqual(dayParts(plans, '2026-11-15', ['chest']), { parts: ['chest'], planned: false });
+});

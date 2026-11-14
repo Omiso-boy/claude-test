@@ -5,6 +5,7 @@ import {
   startTimer, pauseTimer, resumeTimer, resetTimer, remainingMs, isFinished, normalizeTimer, formatClock,
   PARTS, partOf, validateCustomExercise, exercisesForPart, planRows,
   equipmentOf, daySummary, exerciseStats,
+  normalizePlans, togglePlanPart, dayParts,
 } from './lib.js';
 import { PART_ICONS, EQUIPMENT_ICONS, UI_ICONS } from './icons.js';
 
@@ -14,6 +15,7 @@ const KEY_BACKUP = 'kintore.v1.lastBackupAt';
 const KEY_TIMER = 'kintore.v1.timer';
 const KEY_TIMER_AUTO = 'kintore.v1.timerAuto';
 const KEY_PART = 'kintore.v1.lastPart';
+const KEY_PLANS = 'kintore.v1.dayPlans';
 const BACKUP_REMIND_DAYS = 7;
 
 // ---------- 保存 ----------
@@ -27,6 +29,7 @@ function saveJson(key, value) {
 
 let sets = Array.isArray(loadJson(KEY_SETS)) ? loadJson(KEY_SETS) : [];
 let custom = Array.isArray(loadJson(KEY_CUSTOM)) ? loadJson(KEY_CUSTOM) : [];
+let plans = normalizePlans(loadJson(KEY_PLANS)); // { 日付: [部位] } 記録前に決めた「何の日」
 
 function saveSets(next) {
   if (!saveJson(KEY_SETS, next)) { toast('保存できませんでした。空き容量を確認してください', true); return false; }
@@ -134,11 +137,19 @@ document.addEventListener('visibilitychange', () => {
   resetRows();
   render();
 });
-fDate.addEventListener('change', () => { if (!fDate.value) fDate.value = toDateKey(); resetRows(); render(); });
+fDate.addEventListener('change', () => { if (!fDate.value) fDate.value = toDateKey(); onDateChanged(); });
 
 function shiftDate(days) {
   const [y, m, d] = fDate.value.split('-').map(Number);
   fDate.value = toDateKey(new Date(y, m - 1, d + days));
+  onDateChanged();
+}
+
+/** 日付が変わったら、その日に決めた部位のタブを開く */
+function onDateChanged() {
+  const planned = plans[fDate.value];
+  if (planned?.length && !planned.includes(currentPart)) currentPart = planned[0];
+  setPlanOpen(false);
   resetRows();
   render();
 }
@@ -155,17 +166,57 @@ function renderDate() {
 
 function renderSummary() {
   const sum = daySummary(sets, fDate.value, custom);
-  const shownPart = sum.parts[0] ?? currentPart;
-  $('#summary-body').innerHTML = PART_ICONS[shownPart];
-  $('#summary-badge').textContent = sum.parts.length ? `${sum.parts.map(partLabel).join('・')}の日` : 'まだ記録がありません';
-  $('#summary-badge').classList.toggle('empty-badge', !sum.parts.length);
+  const { parts, planned } = dayParts(plans, fDate.value, sum.parts);
+  $('#summary-body').innerHTML = PART_ICONS[parts[0] ?? currentPart];
+  const badge = $('#summary-badge');
+  badge.textContent = parts.length ? `${parts.map(partLabel).join('・')}の日` : '何の日？ タップで決める';
+  badge.classList.toggle('empty-badge', !parts.length);
+  badge.classList.toggle('auto-badge', parts.length > 0 && !planned);
+  badge.setAttribute('aria-label', parts.length ? `${badge.textContent}（タップで変更）` : '今日は何の日か決める');
   $('#stat-sets').textContent = String(sum.setCount);
   $('#stat-ex').textContent = String(sum.exerciseCount);
   $('#stat-time').textContent = sum.minutes == null ? '−' : sum.minutes >= 60 ? `${Math.floor(sum.minutes / 60)}時間${sum.minutes % 60}分` : `${sum.minutes}分`;
+  renderPlanPanel();
 }
+
+// ---------- 何の日を決める ----------
+function savePlans(next) {
+  if (!saveJson(KEY_PLANS, next)) { toast('保存できませんでした', true); return false; }
+  plans = next;
+  return true;
+}
+
+function renderPlanPanel() {
+  const chosen = plans[fDate.value] ?? [];
+  $('#plan-parts').replaceChildren(...PARTS.map((p) => el('button', {
+    type: 'button', class: 'plan-part', 'aria-pressed': String(chosen.includes(p.key)),
+    onclick: () => {
+      const nextParts = togglePlanPart(plans[fDate.value], p.key);
+      const next = { ...plans };
+      if (nextParts.length) next[fDate.value] = nextParts; else delete next[fDate.value];
+      if (!savePlans(next)) return;
+      // 決めた部位の種目一覧を開いておく
+      if (nextParts.length && !nextParts.includes(currentPart)) { currentPart = nextParts[0]; saveJson(KEY_PART, currentPart); }
+      render();
+    },
+  }, icon(PART_ICONS[p.key], 'part-ic'), el('span', {}, p.label))));
+}
+
+function setPlanOpen(open) {
+  $('#plan-panel').hidden = !open;
+  $('#summary-badge').setAttribute('aria-expanded', String(open));
+}
+$('#summary-badge').addEventListener('click', () => setPlanOpen($('#plan-panel').hidden));
+$('#plan-close').addEventListener('click', () => setPlanOpen(false));
+$('#plan-clear').addEventListener('click', () => {
+  const next = { ...plans };
+  delete next[fDate.value];
+  if (savePlans(next)) { setPlanOpen(false); render(); }
+});
 
 // ---------- 記録タブ：種目を選ぶ ----------
 let currentPart = PARTS.some((p) => p.key === loadJson(KEY_PART)) ? loadJson(KEY_PART) : PARTS[0].key;
+if (plans[fDate.value]?.length && !plans[fDate.value].includes(currentPart)) currentPart = plans[fDate.value][0]; // 今日決めた部位から始める
 let currentExercise = null; // 種目画面を開いているときの種目名
 let rows = [];              // 種目画面の未記録の行 [{weight, reps, note, showNote}]
 
@@ -511,6 +562,7 @@ function render() {
   renderDate();
   renderSummary();
   $('#summary').hidden = !!currentExercise; // 種目画面ではセット入力を優先して表示
+  if (currentExercise) setPlanOpen(false);
   renderReminder();
   if (currentExercise) renderExercise(); else renderPick();
   renderHistory();
